@@ -85,6 +85,7 @@ All settings are optional. These are set as fleet defaults in `balena.yml` and c
 | `SOUND_DEVICE_NAME` | auto | Broadcast name for Spotify/AirPlay/UPnP (defaults to `pirate-radio XXXX`) |
 | `SOUND_SPOTIFY_BITRATE` | `160` | Spotify playback bitrate (96, 160, or 320) |
 | `SOUND_VOLUME` | `75` | System volume (0-100) |
+| `BLUETOOTH_DEVICE_NAME` | auto | Bluetooth broadcast name (separate from `SOUND_DEVICE_NAME`) |
 
 The hardware configuration (SPI, `hifiberry-dac` device tree overlay, onboard audio off) is applied automatically via the fleet's configuration variables — you'll find it under **Fleet → Configuration** in the dashboard.
 
