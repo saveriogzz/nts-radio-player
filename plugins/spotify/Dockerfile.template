@@ -4,12 +4,17 @@
 FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:bookworm-build AS build
 
 RUN install_packages \
-    cargo \
-    rustc \
+    curl \
     git \
     pkg-config \
     libasound2-dev \
     libpulse-dev
+
+# librespot v0.8.0 requires Rust edition 2024 (Rust 1.85+); apt's rustc is too old
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV PATH="${CARGO_HOME}/bin:${PATH}"
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
 
 WORKDIR /usr/src
 RUN git clone --branch v0.8.0 --depth 1 https://github.com/librespot-org/librespot.git

@@ -7,7 +7,7 @@ ENV PULSE_SERVER=tcp:audio:4317
 SHELL ["/bin/sh", "-eo", "pipefail", "-c"]
 
 # shairport-sync image doesn't include PulseAudio support; use ALSA bridge
-RUN apk update && apk add --no-cache supervisor curl~=8 && \
+RUN apk update && apk add --no-cache supervisor curl && \
   curl -skL https://raw.githubusercontent.com/balena-io-experimental/audio/master/scripts/alsa-bridge/alpine-setup.sh | sh \
   && apk del curl
 
