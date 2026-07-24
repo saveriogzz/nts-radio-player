@@ -55,5 +55,4 @@ services:
   upnp:
     build: ./plugins/upnp
     restart: on-failure
-    ports:
-      - 49494:49494
+    network_mode: host
