@@ -1,8 +1,9 @@
 name: nts-pirate-radio
 type: sw.application
 description: >-
-  Stream NTS Radio on a Raspberry Pi Zero 2W with Pimoroni Pirate Audio.
-  Supports live channels and infinite mixtapes.
+  Stream NTS Radio, Spotify Connect, AirPlay, Bluetooth, and UPnP on a
+  Raspberry Pi with Pimoroni Pirate Audio. NTS plays on boot; other
+  sources are discoverable on the network.
 version: "1.0.0"
 assets:
   repository:
@@ -30,6 +31,10 @@ post-provisioning: |
   Defaults can be overridden with the `NTS_DEFAULT_CHANNEL`,
   `NTS_DISPLAY_BRIGHTNESS`, and `NTS_BUTTON_DEBOUNCE_MS` environment
   variables in the dashboard.
+
+  The device also advertises itself as a Spotify Connect, AirPlay,
+  Bluetooth, and UPnP target. Disable any source with `SOUND_DISABLE_SPOTIFY`,
+  `SOUND_DISABLE_AIRPLAY`, `SOUND_DISABLE_BLUETOOTH`, or `SOUND_DISABLE_UPNP`.
 data:
   defaultDeviceType: "raspberrypi0-2w-64"
   supportedDeviceTypes:
@@ -47,3 +52,6 @@ data:
     - NTS_DEFAULT_CHANNEL: 1
     - NTS_DISPLAY_BRIGHTNESS: 80
     - NTS_BUTTON_DEBOUNCE_MS: 200
+    - SOUND_DEVICE_NAME: ""
+    - SOUND_SPOTIFY_BITRATE: 160
+    - SOUND_VOLUME: 75
