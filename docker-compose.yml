@@ -12,8 +12,6 @@ services:
       io.balena.features.dbus: 1
     ports:
       - 4317:4317
-    environment:
-      - AUDIO_OUTPUT=DAC
 
   nts-radio:
     build: .
@@ -24,8 +22,6 @@ services:
       - /tmp
     depends_on:
       - audio
-    environment:
-      - PULSE_SERVER=tcp:audio:4317
 
   # ── Plugins ───────────────────────────────────────────────
   spotify:
