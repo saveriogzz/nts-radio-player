@@ -43,7 +43,7 @@ COPY assets/ ./assets/
 ENV UDEV=1
 
 # Connect to the shared PulseAudio server in the audio container
-ENV PULSE_SERVER=tcp:audio:4317
+ENV PULSE_SERVER=tcp:127.0.0.1:4317
 
 # Default environment variables (override via Balena device/fleet variables)
 ENV NTS_DEFAULT_CHANNEL=1

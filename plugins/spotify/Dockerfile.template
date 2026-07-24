@@ -1,6 +1,6 @@
 FROM andrewn/librespot:0.4.2-pulseaudio
 
-ENV PULSE_SERVER=tcp:audio:4317
+ENV PULSE_SERVER=tcp:127.0.0.1:4317
 
 WORKDIR /usr/src
 COPY start.sh ./
