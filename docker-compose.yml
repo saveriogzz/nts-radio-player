@@ -8,10 +8,13 @@ services:
   audio:
     build: ./core/audio
     privileged: true
+    restart: on-failure
     labels:
       io.balena.features.dbus: 1
     ports:
       - 4317:4317
+    environment:
+      - AUDIO_OUTPUT=DAC
 
   nts-radio:
     build: .
