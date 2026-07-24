@@ -26,7 +26,8 @@ RUN install_packages \
     libffi8 \
     libjpeg62-turbo \
     zlib1g \
-    alsa-utils
+    alsa-utils \
+    pulseaudio-utils
 
 # Copy virtual environment from build stage
 COPY --from=build /app/.venv /app/.venv
@@ -40,6 +41,9 @@ COPY assets/ ./assets/
 
 # Enable udev for hardware access (Balena requirement for GPIO/SPI)
 ENV UDEV=1
+
+# Connect to the shared PulseAudio server in the audio container
+ENV PULSE_SERVER=tcp:audio:4317
 
 # Default environment variables (override via Balena device/fleet variables)
 ENV NTS_DEFAULT_CHANNEL=1
