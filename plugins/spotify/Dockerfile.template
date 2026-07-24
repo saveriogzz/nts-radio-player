@@ -1,29 +1,4 @@
-# Multi-stage build: compile librespot from source with PulseAudio backend
-
-# ── Build stage ──────────────────────────────────────────────
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:bookworm-build AS build
-
-RUN install_packages \
-    cargo \
-    rustc \
-    git \
-    pkg-config \
-    libasound2-dev \
-    libpulse-dev
-
-WORKDIR /usr/src
-RUN git clone --branch v0.6.0 --depth 1 https://github.com/librespot-org/librespot.git
-WORKDIR /usr/src/librespot
-RUN cargo build --release --no-default-features --features pulseaudio-backend
-
-# ── Runtime stage ────────────────────────────────────────────
-FROM balenalib/%%BALENA_MACHINE_NAME%%-debian:bookworm-run
-
-RUN install_packages \
-    libpulse0 \
-    libasound2
-
-COPY --from=build /usr/src/librespot/target/release/librespot /usr/bin/librespot
+FROM andrewn/librespot:0.4.2-pulseaudio
 
 ENV PULSE_SERVER=tcp:audio:4317
 
