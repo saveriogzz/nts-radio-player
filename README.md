@@ -68,24 +68,25 @@ Disable any source by setting its environment variable in the dashboard:
 
 ## Configuration
 
-All settings are optional. These are set as fleet defaults in `balena.yml` and can be overridden per-fleet or per-device in the balenaCloud dashboard (Environment Variables):
+All settings are optional. Fleet-level defaults are preconfigured in `balena.yml` and can be changed under **Fleet → Variables** in the dashboard. Per-device variables are set under **Device → Device Variables**.
 
-**NTS settings:**
+**Fleet variables** (apply to all devices, set at deploy time):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NTS_DEFAULT_CHANNEL` | `1` | Start on channel 1 or 2 |
 | `NTS_DISPLAY_BRIGHTNESS` | `80` | Backlight brightness 0-100 |
 | `NTS_BUTTON_DEBOUNCE_MS` | `200` | Button debounce in ms |
+| `SOUND_VOLUME` | `75` | System volume (0-100) |
+| `AUDIO_OUTPUT` | `DAC` | Audio output interface (`AUTO`, `DAC`, `RPI_HEADPHONES`, `RPI_HDMI0`) |
 
-**Audio settings:**
+**Per-device variables** (set per device in the dashboard after adding it):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOUND_DEVICE_NAME` | auto | Broadcast name for Spotify/AirPlay/UPnP (defaults to `pirate-radio XXXX`) |
-| `SOUND_SPOTIFY_BITRATE` | `160` | Spotify playback bitrate (96, 160, or 320) |
-| `SOUND_VOLUME` | `75` | System volume (0-100) |
+| `SOUND_DEVICE_NAME` | `pirate-radio XXXX` | Broadcast name for Spotify Connect, AirPlay, and UPnP |
 | `BLUETOOTH_DEVICE_NAME` | auto | Bluetooth broadcast name (separate from `SOUND_DEVICE_NAME`) |
+| `SOUND_SPOTIFY_BITRATE` | `160` | Spotify playback bitrate (96, 160, or 320) |
 
 The hardware configuration (SPI, `hifiberry-dac` device tree overlay, onboard audio off) is applied automatically via the fleet's configuration variables — you'll find it under **Fleet → Configuration** in the dashboard.
 
