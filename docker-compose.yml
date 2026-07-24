@@ -43,16 +43,3 @@ services:
     labels:
       io.balena.features.dbus: 1
 
-  bluetooth:
-    build: ./plugins/bluetooth
-    restart: on-failure
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-    labels:
-      io.balena.features.dbus: 1
-
-  upnp:
-    build: ./plugins/upnp
-    restart: on-failure
-    network_mode: host
