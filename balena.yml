@@ -1,10 +1,10 @@
 name: nts-pirate-radio
 type: sw.application
 description: >-
-  Stream NTS Radio, Spotify Connect, AirPlay, Bluetooth, and UPnP on a
-  Raspberry Pi with Pimoroni Pirate Audio. NTS plays on boot; other
-  sources are discoverable on the network.
-version: "2.0.0"
+  Stream NTS Radio, Spotify Connect, and AirPlay on a Raspberry Pi
+  with Pimoroni Pirate Audio. NTS plays on boot; other sources are
+  discoverable on the network.
+version: "2.0.1"
 assets:
   repository:
     type: blob.asset
