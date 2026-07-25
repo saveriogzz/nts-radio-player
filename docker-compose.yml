@@ -8,7 +8,7 @@ services:
   audio:
     build: ./core/audio
     privileged: true
-    restart: on-failure
+    restart: always
     labels:
       io.balena.features.dbus: 1
     ports:

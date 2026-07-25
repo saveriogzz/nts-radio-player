@@ -17,8 +17,14 @@ while ! aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; do
   WAITED=$((WAITED + 2))
 done
 
+# Resolve the DAC's PulseAudio sink name directly from ALSA.
+# The base image's entrypoint may have written a stale sink file before
+# the DAC was ready, so we detect it ourselves.
+DAC_OUTPUT=""
 if aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; then
-  echo "HiFiBerry DAC detected."
+  DAC_CARD=$(aplay -l | grep "snd_rpi_hifiberry" | head -1 | sed 's/^card \([0-9]*\):.*/\1/')
+  DAC_OUTPUT="alsa_output.dac.stereo-fallback"
+  echo "HiFiBerry DAC detected on card ${DAC_CARD}, using sink: ${DAC_OUTPUT}"
 fi
 
 function set_loopback_latency() {
@@ -30,9 +36,14 @@ function set_loopback_latency() {
 function route_output_sink() {
   local OUTPUT=""
 
-  local SINK_FILE=/run/pulse/pulseaudio.sink
-  if [[ -f "$SINK_FILE" ]]; then
-    OUTPUT=$(cat "$SINK_FILE")
+  # Prefer the DAC we detected, fall back to the sink file from the base image
+  if [[ -n "$DAC_OUTPUT" ]]; then
+    OUTPUT="$DAC_OUTPUT"
+  else
+    local SINK_FILE=/run/pulse/pulseaudio.sink
+    if [[ -f "$SINK_FILE" ]]; then
+      OUTPUT=$(cat "$SINK_FILE")
+    fi
   fi
   OUTPUT="${OUTPUT:-0}"
   sed -i "s/%OUTPUT_SINK%/sink=$OUTPUT/" "$CONFIG_FILE"
