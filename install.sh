@@ -54,7 +54,8 @@ sudo apt-get install -y -qq \
     python3-dev \
     gcc \
     swig \
-    curl
+    curl \
+    pulseaudio
 
 # ── Install uv ────────────────────────────────────────────
 echo "[4/6] Installing uv..."

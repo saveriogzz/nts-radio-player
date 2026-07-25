@@ -1,6 +1,21 @@
 version: "2.1"
 
+volumes:
+  spotifycache:
+
 services:
+  # ── Core ──────────────────────────────────────────────────
+  audio:
+    build: ./core/audio
+    privileged: true
+    restart: on-failure
+    labels:
+      io.balena.features.dbus: 1
+    ports:
+      - 4317:4317
+    environment:
+      - AUDIO_OUTPUT=DAC
+
   nts-radio:
     build: .
     privileged: true
@@ -8,3 +23,23 @@ services:
     network_mode: host
     tmpfs:
       - /tmp
+    depends_on:
+      - audio
+
+  # ── Plugins ───────────────────────────────────────────────
+  spotify:
+    build: ./plugins/spotify
+    restart: on-failure
+    privileged: true
+    network_mode: host
+    volumes:
+      - spotifycache:/var/cache/raspotify
+
+  airplay:
+    build: ./plugins/airplay
+    restart: on-failure
+    network_mode: host
+    privileged: true
+    labels:
+      io.balena.features.dbus: 1
+
