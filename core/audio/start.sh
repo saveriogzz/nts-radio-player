@@ -4,6 +4,23 @@ set -e
 CONFIG_TEMPLATE=/usr/src/balena-sound.pa
 CONFIG_FILE=/etc/pulse/default.pa.d/01-balenasound.pa
 
+# Wait for the HiFiBerry DAC to appear (I2S driver loads asynchronously)
+MAX_WAIT=30
+WAITED=0
+while ! aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; do
+  if [[ $WAITED -ge $MAX_WAIT ]]; then
+    echo "WARNING: HiFiBerry DAC not detected after ${MAX_WAIT}s, proceeding anyway."
+    break
+  fi
+  echo "Waiting for HiFiBerry DAC... (${WAITED}s)"
+  sleep 2
+  WAITED=$((WAITED + 2))
+done
+
+if aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; then
+  echo "HiFiBerry DAC detected."
+fi
+
 function set_loopback_latency() {
   local LOOPBACK="$1"
   local LATENCY="$2"
