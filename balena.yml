@@ -32,9 +32,8 @@ post-provisioning: |
   `NTS_DISPLAY_BRIGHTNESS`, and `NTS_BUTTON_DEBOUNCE_MS` environment
   variables in the dashboard.
 
-  The device also advertises itself as a Spotify Connect, AirPlay,
-  Bluetooth, and UPnP target. Disable any source with `SOUND_DISABLE_SPOTIFY`,
-  `SOUND_DISABLE_AIRPLAY`, `SOUND_DISABLE_BLUETOOTH`, or `SOUND_DISABLE_UPNP`.
+  The device also advertises itself as a Spotify Connect and AirPlay
+  target. Disable either with `SOUND_DISABLE_SPOTIFY` or `SOUND_DISABLE_AIRPLAY`.
 data:
   defaultDeviceType: "raspberrypi0-2w-64"
   supportedDeviceTypes:

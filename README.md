@@ -1,12 +1,12 @@
 # NTS Radio for Raspberry Pi
 
-Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pimoroni Pirate Audio Line-out HAT. Also works as a Spotify Connect, AirPlay, Bluetooth, and UPnP receiver. Deployed via Balena Cloud.
+Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pimoroni Pirate Audio Line-out HAT. Also works as a Spotify Connect and AirPlay receiver. Deployed via Balena Cloud.
 
 [![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/saveriogzz/nts-pirate-radio)
 
 ## What you need
 
-- A Raspberry Pi with a 40-pin header — Zero 2W recommended; Pi 3/4/5 also supported (Bluetooth requires Pi 3+ or Zero 2W)
+- A Raspberry Pi with a 40-pin header — Zero 2W recommended; Pi 3/4/5 also supported
 - [Pimoroni Pirate Audio Line-out](https://shop.pimoroni.com/products/pirate-audio-line-out) — ST7789 240x240 display, 4 buttons, I2S DAC (other Pirate Audio variants with the same DAC work too)
 - A microSD card (4 GB or larger) and power supply
 - A free [balenaCloud](https://dashboard.balena-cloud.com/signup) account (up to 10 devices)
@@ -20,7 +20,7 @@ Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pi
 3. Click **Add device**, enter your Wi-Fi credentials, and download the OS image.
 4. Flash the image to the SD card with [balenaEtcher](https://etcher.balena.io/), insert it, and power on.
 
-On first boot the device downloads the application (a few minutes depending on your connection), the display shows **NTS RADIO — Starting up...**, and channel 1 starts playing automatically. The device also advertises itself on the network as a Spotify Connect, AirPlay, and UPnP target, and is discoverable via Bluetooth.
+On first boot the device downloads the application (a few minutes depending on your connection), the display shows **NTS RADIO — Starting up...**, and channel 1 starts playing automatically. The device also advertises itself on the network as a Spotify Connect and AirPlay target.
 
 ### Manual deploy (balena CLI)
 
@@ -54,8 +54,6 @@ NTS Radio plays on boot. The device also works as a receiver for:
 |--------|----------|------------|
 | **Spotify Connect** | [librespot](https://github.com/librespot-org/librespot) | Open Spotify on any device → select this device as a speaker |
 | **AirPlay 2** | [shairport-sync](https://github.com/mikebrady/shairport-sync) | Use AirPlay from any Apple device or iTunes |
-| **Bluetooth** | A2DP via [balena bluetooth block](https://github.com/balena-io-experimental/bluetooth) | Pair your phone/laptop via Bluetooth settings |
-| **UPnP/DLNA** | [gmediarender](https://github.com/hzeller/gmrender-resurrect) | Cast from any UPnP/DLNA compatible app |
 
 Disable any source by setting its environment variable in the dashboard:
 
@@ -63,8 +61,6 @@ Disable any source by setting its environment variable in the dashboard:
 |----------|--------|
 | `SOUND_DISABLE_SPOTIFY` | Disable Spotify Connect |
 | `SOUND_DISABLE_AIRPLAY` | Disable AirPlay |
-| `SOUND_DISABLE_BLUETOOTH` | Disable Bluetooth |
-| `SOUND_DISABLE_UPNP` | Disable UPnP/DLNA |
 
 ## Configuration
 
@@ -84,8 +80,7 @@ All settings are optional. Fleet-level defaults are preconfigured in `balena.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOUND_DEVICE_NAME` | `pirate-radio XXXX` | Broadcast name for Spotify Connect, AirPlay, and UPnP |
-| `BLUETOOTH_DEVICE_NAME` | auto | Bluetooth broadcast name (separate from `SOUND_DEVICE_NAME`) |
+| `SOUND_DEVICE_NAME` | `pirate-radio XXXX` | Broadcast name for Spotify Connect and AirPlay |
 | `SOUND_SPOTIFY_BITRATE` | `160` | Spotify playback bitrate (96, 160, or 320) |
 
 The hardware configuration (SPI, `hifiberry-dac` device tree overlay, onboard audio off) is applied automatically via the fleet's configuration variables — you'll find it under **Fleet → Configuration** in the dashboard.
@@ -111,9 +106,7 @@ nts-pirate-radio/
 ├── core/audio/                # PulseAudio server (shared DAC access)
 ├── plugins/
 │   ├── spotify/               # Spotify Connect (librespot)
-│   ├── airplay/               # AirPlay 2 (shairport-sync)
-│   ├── bluetooth/             # Bluetooth A2DP
-│   └── upnp/                  # UPnP/DLNA (gmediarender)
+│   └── airplay/               # AirPlay 2 (shairport-sync)
 ├── assets/mixtapes/           # Bundled mixtape icons
 ├── tests/                     # Unit tests (hardware mocked, run anywhere)
 ├── Dockerfile.template        # nts-radio container build
