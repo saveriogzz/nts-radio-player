@@ -1,6 +1,14 @@
-FROM andrewn/librespot:0.4.2-pulseaudio
+# Soloist binaries need glibc >= 2.38 (bookworm has 2.36)
+FROM debian:trixie-slim
 
-ENV PULSE_SERVER=tcp:127.0.0.1:4317
+# Soloist talks to the shared PipeWire server natively (its preferred backend)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates curl libatomic1 libpipewire-0.3-0t64 libspa-0.2-modules pipewire \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV PIPEWIRE_RUNTIME_DIR=/run/pipewire
+ENV SOLOIST_ARCH=%%BALENA_ARCH%%
 
 WORKDIR /usr/src
 COPY start.sh ./

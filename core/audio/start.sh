@@ -1,74 +1,132 @@
 #!/bin/bash
 set -e
 
-CONFIG_TEMPLATE=/usr/src/balena-sound.pa
-CONFIG_FILE=/etc/pulse/default.pa.d/01-balenasound.pa
+AUDIO_OUTPUT=${AUDIO_OUTPUT:-DAC}
+VOLUME=${VOLUME:-75}
 
-# Wait for the HiFiBerry DAC to appear (I2S driver loads asynchronously)
-MAX_WAIT=30
-WAITED=0
-while ! aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; do
-  if [[ $WAITED -ge $MAX_WAIT ]]; then
-    echo "WARNING: HiFiBerry DAC not detected after ${MAX_WAIT}s, proceeding anyway."
-    break
-  fi
-  echo "Waiting for HiFiBerry DAC... (${WAITED}s)"
-  sleep 2
-  WAITED=$((WAITED + 2))
-done
-
-# Resolve the DAC's PulseAudio sink name directly from ALSA.
-# The base image's entrypoint may have written a stale sink file before
-# the DAC was ready, so we detect it ourselves.
-DAC_OUTPUT=""
-if aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; then
-  DAC_CARD=$(aplay -l | grep "snd_rpi_hifiberry" | head -1 | sed 's/^card \([0-9]*\):.*/\1/')
-  DAC_OUTPUT="alsa_output.dac.stereo-fallback"
-  echo "HiFiBerry DAC detected on card ${DAC_CARD}, using sink: ${DAC_OUTPUT}"
+# Set AUDIO_DEBUG to get verbose PipeWire/WirePlumber logs
+if [[ -n "$AUDIO_DEBUG" ]]; then
+  export PIPEWIRE_DEBUG=3 WIREPLUMBER_DEBUG=3
 fi
 
-function set_loopback_latency() {
-  local LOOPBACK="$1"
-  local LATENCY="$2"
-  sed -i "s/%$LOOPBACK%/$LATENCY/" "$CONFIG_FILE"
-}
+# WirePlumber discovers sound cards through udev, whose database isn't
+# shared from the host; run udevd here so the ALSA devices get registered
+/lib/systemd/systemd-udevd --daemon
+udevadm trigger --action=add --subsystem-match=sound
+udevadm settle --timeout=10 || true
 
-function route_output_sink() {
-  local OUTPUT=""
-
-  # Prefer the DAC we detected, fall back to the sink file from the base image
-  if [[ -n "$DAC_OUTPUT" ]]; then
-    OUTPUT="$DAC_OUTPUT"
-  else
-    local SINK_FILE=/run/pulse/pulseaudio.sink
-    if [[ -f "$SINK_FILE" ]]; then
-      OUTPUT=$(cat "$SINK_FILE")
+# Wait for the HiFiBerry DAC to appear (I2S driver loads asynchronously)
+if [[ "$AUDIO_OUTPUT" == "DAC" ]]; then
+  MAX_WAIT=30
+  WAITED=0
+  while ! aplay -l 2>/dev/null | grep -q "snd_rpi_hifiberry"; do
+    if [[ $WAITED -ge $MAX_WAIT ]]; then
+      if ! grep -qi hifiberry /proc/asound/cards; then
+        echo "ERROR: HiFiBerry DAC not registered by the kernel. Check that the"
+        echo "  'hifiberry-dac' dtoverlay is applied and onboard audio is off"
+        echo "  (dtparam audio=off). A device-level RESIN_HOST_CONFIG_dtoverlay or"
+        echo "  _dtparam override hides the fleet value: list them with"
+        echo "  'balena env list --device <uuid> --config' and remove them."
+      else
+        echo "WARNING: HiFiBerry DAC registered but not visible to ALSA here."
+      fi
+      echo "Kernel sound cards:"; cat /proc/asound/cards
+      echo "Sound devices:"; ls /dev/snd 2>&1
+      break
     fi
-  fi
-  OUTPUT="${OUTPUT:-0}"
-  sed -i "s/%OUTPUT_SINK%/sink=$OUTPUT/" "$CONFIG_FILE"
-  echo "Routing 'balena-sound.output' to '$OUTPUT'."
+    echo "Waiting for HiFiBerry DAC... (${WAITED}s)"
+    sleep 2
+    WAITED=$((WAITED + 2))
+  done
+fi
+
+mkdir -p "$XDG_RUNTIME_DIR"
+rm -f "$XDG_RUNTIME_DIR"/pipewire-0* "$XDG_RUNTIME_DIR"/pulse/native
+
+# Private D-Bus session bus: several PipeWire/WirePlumber modules need one
+# and WirePlumber exits if it can't reach it
+dbus-uuidgen --ensure=/etc/machine-id
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/dbus-session"
+rm -f "$XDG_RUNTIME_DIR/dbus-session"
+dbus-daemon --session --fork --nopidfile --address="$DBUS_SESSION_BUS_ADDRESS"
+
+declare -A PIDS
+pipewire &
+PIDS[pipewire]=$!
+# WirePlumber needs the PipeWire socket to exist before it connects
+until [[ -S "$XDG_RUNTIME_DIR/pipewire-0" ]]; do sleep 0.2; done
+wireplumber &
+PIDS[wireplumber]=$!
+pipewire-pulse &
+PIDS[pipewire-pulse]=$!
+
+# ALSA card name pattern for each AUDIO_OUTPUT value
+case "$AUDIO_OUTPUT" in
+  DAC) CARD_PATTERN="hifiberry" ;;
+  RPI_HEADPHONES) CARD_PATTERN="Headphones" ;;
+  RPI_HDMI0) CARD_PATTERN="hdmi-?0" ;;
+  *) CARD_PATTERN="" ;;
+esac
+
+# Match the pattern against every name a sink exposes; which property holds
+# the ALSA card name differs between PipeWire/WirePlumber versions
+function find_sink() {
+  pw-dump 2>/dev/null | jq -r --arg p "$CARD_PATTERN" '
+    .[] | select(.info.props["media.class"] == "Audio/Sink")
+        | select([.info.props["alsa.card_name"], .info.props["api.alsa.card.name"],
+                  .info.props["alsa.card"], .info.props["node.name"],
+                  .info.props["node.description"]]
+                 | map(select(. != null) | tostring) | any(test($p; "i")))
+        | .id' | head -1
 }
 
-function reset_sound_config() {
-  if [[ -f "$CONFIG_FILE" ]]; then
-    rm "$CONFIG_FILE"
-  fi
-  cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
+function list_sinks() {
+  pw-dump 2>/dev/null | jq -r '
+    .[] | select(.info.props["media.class"] == "Audio/Sink")
+        | "  sink \(.id): \(.info.props["node.name"]) (\(.info.props["node.description"] // "?"))"'
 }
 
-SOUND_INPUT_LATENCY=${SOUND_INPUT_LATENCY:-200}
-SOUND_OUTPUT_LATENCY=${SOUND_OUTPUT_LATENCY:-200}
+# Pick the output sink once WirePlumber has created the ALSA nodes
+# (can take a while on a Pi Zero)
+SINK_ID=""
+for _ in $(seq 1 30); do
+  if [[ -z "$CARD_PATTERN" ]]; then
+    wpctl inspect @DEFAULT_AUDIO_SINK@ >/dev/null 2>&1 && break
+  else
+    SINK_ID=$(find_sink)
+    [[ -n "$SINK_ID" ]] && break
+  fi
+  sleep 1
+done
 
-echo "Setting audio routing rules (standalone mode)..."
-reset_sound_config
+echo "Audio sinks:"
+list_sinks
 
-# Standalone: route input directly to output (no snapcast)
-sed -i "s/%INPUT_SINK%/sink=balena-sound.output/" "$CONFIG_FILE"
-echo "Routing 'balena-sound.input' to 'balena-sound.output'."
+if [[ -n "$SINK_ID" ]]; then
+  wpctl set-default "$SINK_ID"
+  echo "Routing audio to sink $SINK_ID ($AUDIO_OUTPUT)."
+else
+  if [[ -n "$CARD_PATTERN" ]]; then
+    echo "WARNING: no sink matching '$CARD_PATTERN' for AUDIO_OUTPUT=$AUDIO_OUTPUT, using WirePlumber's default."
+  else
+    echo "Using WirePlumber's default sink (AUTO)."
+  fi
+fi
+if ! wpctl set-volume @DEFAULT_AUDIO_SINK@ "$((VOLUME))%"; then
+  echo "WARNING: no output sink available, volume not set."
+fi
 
-route_output_sink
-set_loopback_latency "INPUT_LATENCY" "$SOUND_INPUT_LATENCY"
-set_loopback_latency "OUTPUT_LATENCY" "$SOUND_OUTPUT_LATENCY"
-
-exec pulseaudio
+# Exit (and let the container restart) if any daemon dies
+set +e
+wait -n -p DEAD_PID
+STATUS=$?
+sleep 1
+for name in pipewire wireplumber pipewire-pulse; do
+  if [[ "${PIDS[$name]}" == "$DEAD_PID" ]]; then
+    echo "ERROR: $name exited with status $STATUS"
+  elif ! kill -0 "${PIDS[$name]}" 2>/dev/null; then
+    wait "${PIDS[$name]}"
+    echo "ERROR: $name also exited (status $?)"
+  fi
+done
+exit 1

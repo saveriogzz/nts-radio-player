@@ -1,7 +1,20 @@
-# hadolint ignore=DL3006
-FROM bh.cr/balenalabs/audio-%%BALENA_ARCH%%
+FROM debian:bookworm-slim
+
+# PipeWire graph + WirePlumber session manager + PulseAudio protocol shim
+# (for clients without native PipeWire support, e.g. shairport-sync)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    alsa-utils dbus-bin dbus-daemon dbus-session-bus-common jq pipewire pipewire-bin pipewire-pulse udev wireplumber \
+  && rm -rf /var/lib/apt/lists/*
+
+# The native socket lives on a volume shared with client containers
+ENV XDG_RUNTIME_DIR=/run/pipewire
+
+COPY pipewire-pulse.conf /etc/pipewire/pipewire-pulse.conf.d/10-nts-radio.conf
+COPY wireplumber.lua /etc/wireplumber/main.lua.d/60-nts-radio.lua
+COPY wireplumber-bluetooth.lua /etc/wireplumber/bluetooth.lua.d/60-nts-radio.lua
 
 WORKDIR /usr/src
-COPY balena-sound.pa start.sh ./
+COPY start.sh ./
 
 CMD [ "/bin/bash", "/usr/src/start.sh" ]
