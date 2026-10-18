@@ -5,6 +5,4 @@ __pycache__
 *.pyc
 nts/__pycache__
 *.md
-install.sh
-nts-radio.service
 .balena

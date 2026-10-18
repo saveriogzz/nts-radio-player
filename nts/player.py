@@ -44,13 +44,17 @@ class MPVPlayer:
             "mpv",
             "--no-video",
             "--no-terminal",
-            "--ao=pulse",
+            "--ao=pipewire",
             f"--input-ipc-server={IPC_SOCKET_PATH}",
             "--idle=no",
+            # ~60 s read-ahead (~2 MiB at NTS's 256 kbps) rides out Wi-Fi
+            # stalls; after an underrun, refill 5 s before resuming instead
+            # of stuttering on every packet
             "--cache=yes",
-            "--cache-secs=10",
-            "--demuxer-max-bytes=500KiB",
+            "--cache-secs=60",
+            "--demuxer-max-bytes=2MiB",
             "--demuxer-max-back-bytes=100KiB",
+            "--cache-pause-wait=5",
             url,
         ]
 

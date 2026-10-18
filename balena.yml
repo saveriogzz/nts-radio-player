@@ -1,4 +1,4 @@
-name: nts-pirate-radio
+name: nts-radio-player
 type: sw.application
 description: >-
   Stream NTS Radio, Spotify Connect, and AirPlay on a Raspberry Pi
@@ -9,11 +9,11 @@ assets:
   repository:
     type: blob.asset
     data:
-      url: "https://github.com/saveriogzz/nts-pirate-radio"
+      url: "https://github.com/saveriogzz/nts-radio-player"
   logo:
     type: blob.asset
     data:
-      url: "https://raw.githubusercontent.com/saveriogzz/nts-pirate-radio/main/logo.png"
+      url: "https://raw.githubusercontent.com/saveriogzz/nts-radio-player/main/logo.png"
 post-provisioning: |
   ## Usage
 
@@ -33,7 +33,10 @@ post-provisioning: |
   variables in the dashboard.
 
   The device also advertises itself as a Spotify Connect and AirPlay
-  target. Disable either with `SOUND_DISABLE_SPOTIFY` or `SOUND_DISABLE_AIRPLAY`.
+  target. Spotify Connect requires a Soloist API key: add `SOLOIST_API_KEY`
+  under Fleet → Variables before adding devices (generate one at
+  https://developer.spotify.com/documentation/soloist).
+  Disable either source with `DISABLE_SPOTIFY` or `DISABLE_AIRPLAY`.
 data:
   defaultDeviceType: "raspberrypi0-2w-64"
   supportedDeviceTypes:
@@ -51,5 +54,5 @@ data:
     - NTS_DEFAULT_CHANNEL: 1
     - NTS_DISPLAY_BRIGHTNESS: 80
     - NTS_BUTTON_DEBOUNCE_MS: 200
-    - SOUND_VOLUME: 75
+    - VOLUME: 75
     - AUDIO_OUTPUT: DAC
