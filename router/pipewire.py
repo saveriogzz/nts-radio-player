@@ -106,23 +106,41 @@ class GraphTracker:
         return changes
 
 
+# pw-dump 0.3.65 (Debian bookworm) sometimes prints a key-less "[ ]" inside an
+# object (seen on Soloist's ports: `"ProcessLatency": [ ], [ ] }`), which is
+# invalid JSON. Drop such stray empty arrays before parsing.
+_STRAY_EMPTY_ARRAY = re.compile(r",\s*\[\s*\](?=\s*[}\]])")
+# pw-dump ends every top-level array with "]" alone on a line
+_TOP_LEVEL_END = re.compile(r"^\][ \t]*$", re.M)
+
+
+def _parse_dump(text: str):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return json.loads(_STRAY_EMPTY_ARRAY.sub("", text))
+
+
 def iter_json_arrays(buffer: str) -> tuple[list, str]:
-    """Split complete top-level JSON values off the front of ``buffer``."""
-    decoder = json.JSONDecoder()
+    """Split complete top-level arrays off the front of ``buffer``.
+
+    Chunks are cut at pw-dump's top-level closing bracket rather than by the
+    JSON parser, so a malformed update is skipped (and logged) instead of
+    stalling everything after it.
+    """
     values = []
-    idx = 0
     while True:
-        while idx < len(buffer) and buffer[idx].isspace():
-            idx += 1
-        if idx >= len(buffer):
-            break
-        try:
-            value, end = decoder.raw_decode(buffer, idx)
-        except ValueError:
+        match = _TOP_LEVEL_END.search(buffer)
+        if match is None:
             break  # incomplete; wait for more input
-        values.append(value)
-        idx = end
-    return values, buffer[idx:]
+        chunk, buffer = buffer[: match.end()], buffer[match.end():]
+        if not chunk.strip():
+            continue
+        try:
+            values.append(_parse_dump(chunk))
+        except ValueError as e:
+            logger.warning("Skipping unparseable pw-dump update (%s)", e)
+    return values, buffer
 
 
 async def monitor(retry_delay: float = 5.0) -> AsyncIterator[dict[str, bool]]:

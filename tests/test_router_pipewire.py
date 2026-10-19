@@ -58,11 +58,62 @@ def test_two_streams_one_source():
 
 
 def test_iter_json_arrays_handles_partial_input():
-    values, rest = iter_json_arrays('[{"id": 1}]\n[{"id": 2}')
+    # pw-dump's real layout: top-level brackets on their own lines
+    values, rest = iter_json_arrays('[\n  {"id": 1}\n]\n[\n  {"id": 2}\n')
     assert values == [[{"id": 1}]]
     values, rest = iter_json_arrays(rest + "]\n")
     assert values == [[{"id": 2}]]
-    assert rest == ""
+    assert rest.strip() == ""
+
+
+# Captured on the device (pw-dump 0.3.65) while Spotify played: a key-less
+# "[ ]" inside a port's params makes the whole dump invalid JSON
+MALFORMED_PORT_DUMP = """[
+  {
+    "id": 55,
+    "type": "PipeWire:Interface:Port",
+    "info": {
+      "params": {
+        "Latency": [
+          {
+            "direction": "Input",
+            "minQuantum": 1.000000
+          }
+        ],
+        "ProcessLatency": [
+        ],
+        [ ]
+      }
+    }
+  },
+  {
+    "id": 53,
+    "type": "PipeWire:Interface:Node",
+    "info": {
+      "state": "running",
+      "props": {
+        "media.class": "Stream/Output/Audio",
+        "node.name": "Spotify"
+      }
+    }
+  }
+]
+"""
+
+
+def test_pw_dump_bug_is_repaired():
+    values, rest = iter_json_arrays(MALFORMED_PORT_DUMP)
+    assert len(values) == 1
+    t = GraphTracker()
+    assert t.apply(values[0]) == {"spotify": True}
+
+
+def test_unrepairable_chunk_is_skipped_not_stalled():
+    good = '[\n  {"id": 43, "type": "PipeWire:Interface:Node", "info": {"state": "running",' \
+           ' "props": {"media.class": "Stream/Output/Audio", "application.name": "mpv"}}}\n]\n'
+    values, rest = iter_json_arrays('[\n  {"id": oops}\n]\n' + good)
+    assert len(values) == 1
+    assert GraphTracker().apply(values[0]) == {"nts": True}
 
 
 def test_monitor_against_fake_pw_dump(tmp_path, monkeypatch):
@@ -74,9 +125,9 @@ def test_monitor_against_fake_pw_dump(tmp_path, monkeypatch):
     script.write_text(
         "#!/bin/sh\n"
         "cat <<'JSON'\n"
-        '[{"id": 43, "type": "PipeWire:Interface:Node", "info": {"state": "running",'
-        ' "props": {"media.class": "Stream/Output/Audio", "node.name": "mpv", "application.name": "mpv"}}}]\n'
-        '[{"id": 43, "type": "PipeWire:Interface:Node", "info": {"state": "paused"}}]\n'
+        '[\n  {"id": 43, "type": "PipeWire:Interface:Node", "info": {"state": "running",'
+        ' "props": {"media.class": "Stream/Output/Audio", "node.name": "mpv", "application.name": "mpv"}}}\n]\n'
+        '[\n  {"id": 43, "type": "PipeWire:Interface:Node", "info": {"state": "paused"}}\n]\n'
         "JSON\n"
     )
     script.chmod(0o755)
