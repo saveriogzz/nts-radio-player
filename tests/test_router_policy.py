@@ -52,11 +52,3 @@ def test_repeated_playing_reports_are_ignored():
     # nts still running for a moment before it stops: not a new start
     assert a.update("nts", True) is None
     assert a.active == "spotify"
-
-
-def test_forget_active_source():
-    a = Arbiter()
-    a.update("spotify", True)
-    a.forget("spotify")
-    assert a.active is None
-    assert "spotify" not in a.playing

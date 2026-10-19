@@ -1,7 +1,7 @@
 """Spotify Connect adapter: talks to Soloist's local WebSocket API.
 
 Soloist (the spotify container) runs with ``--ws 127.0.0.1:4318``. The adapter
-keeps a connection open, folds events into a ``SpotifyState`` for the
+keeps a connection open, folds events into a ``NowPlaying`` for the
 now-playing feed, and sends commands. Knowing *whether* Spotify is playing
 comes from PipeWire; this is only for metadata and control.
 """
@@ -12,7 +12,7 @@ import logging
 from dataclasses import replace
 from typing import Awaitable, Callable, Optional
 
-from router.state import SpotifyState, apply_message
+from router.state import NowPlaying, apply_message
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class SoloistAdapter:
     def __init__(self, on_change: Callable[[], Awaitable[None]], url: str = DEFAULT_URL):
         self._on_change = on_change
         self._url = url
-        self.state = SpotifyState()
+        self.state = NowPlaying()
         self._ws = None
 
     async def handle_text(self, text: str) -> None:

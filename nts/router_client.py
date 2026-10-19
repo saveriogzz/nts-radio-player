@@ -12,10 +12,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from router.state import SpotifyState, spotify_from_wire
-
-# Every source's now-playing data has the same shape
-NowPlaying = SpotifyState
+from router.state import NowPlaying, now_playing_from_wire
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +26,9 @@ class RouterState:
     active: Optional[str] = None  # "nts", "spotify", ... or None
     playing: frozenset = field(default_factory=frozenset)
     sources: dict = field(default_factory=dict)  # name -> NowPlaying
-    connected: bool = False
 
     def now_playing(self, source: str) -> NowPlaying:
         return self.sources.get(source) or NowPlaying()
-
-    @property
-    def spotify(self) -> NowPlaying:
-        return self.now_playing("spotify")
 
 
 def parse_state(msg: dict) -> Optional[RouterState]:
@@ -47,9 +39,8 @@ def parse_state(msg: dict) -> Optional[RouterState]:
     return RouterState(
         active=msg.get("active"),
         playing=frozenset(msg.get("playing") or ()),
-        sources={name: spotify_from_wire(data) for name, data in sources.items()
+        sources={name: now_playing_from_wire(data) for name, data in sources.items()
                  if isinstance(data, dict)},
-        connected=True,
     )
 
 
@@ -123,6 +114,6 @@ class RouterClient:
                             pass
                     self._ws = None
             # Without the router nobody arbitrates; report "no owner"
-            self._on_state(RouterState(connected=False))
+            self._on_state(RouterState())
             self._stop.wait(delay)
             delay = min(delay * 2, RECONNECT_MAX)

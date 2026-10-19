@@ -414,15 +414,6 @@ class Display:
 
         self._push_image(img)
 
-    def render_spotify(
-        self,
-        info,
-        is_playing: bool,
-        artwork: Optional[Image.Image] = None,
-    ):
-        """Render the Spotify Connect "now playing" screen."""
-        self.render_now_playing("Spotify", SPOTIFY_GREEN, info, is_playing, artwork)
-
     def render_now_playing(
         self,
         label: str,

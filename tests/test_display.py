@@ -330,22 +330,22 @@ class TestSpotifyScreen:
     """Tests for the Spotify Connect now-playing screen."""
 
     def _info(self, **kw):
-        from router.state import SpotifyState
+        from router.state import NowPlaying
         fields = dict(status="playing", title="My Song", artist="Artist", album="Album",
                       duration_ms=200000, position_ms=50000, position_ts=0.0, speed=0.0)
         fields.update(kw)
-        return SpotifyState(**fields)
+        return NowPlaying(**fields)
 
     def test_render_without_artwork(self, display):
         with patch.object(display, "_push_image") as push:
-            display.render_spotify(self._info(), True)
+            display.render_now_playing("Spotify", (30, 215, 96), self._info(), True)
         img = push.call_args[0][0]
         assert img.size == (WIDTH, HEIGHT)
 
     def test_render_with_artwork(self, display):
         art = Image.new("RGB", (120, 120), (1, 2, 3))
         with patch.object(display, "_push_image") as push:
-            display.render_spotify(self._info(), False, artwork=art)
+            display.render_now_playing("Spotify", (30, 215, 96), self._info(), False, artwork=art)
         img = push.call_args[0][0]
         assert img.getpixel((WIDTH // 2, 80)) == (1, 2, 3)
 
@@ -358,18 +358,18 @@ class TestSpotifyScreen:
             return results[-1]
 
         with patch.object(display, "_truncate_text", side_effect=spy):
-            display.render_spotify(self._info(title="X" * 200), True)
+            display.render_now_playing("Spotify", (30, 215, 96), self._info(title="X" * 200), True)
         assert results[0].endswith("...")
 
     def test_empty_state_renders(self, display):
-        from router.state import SpotifyState
-        display.render_spotify(SpotifyState(), False)
+        from router.state import NowPlaying
+        display.render_now_playing("Spotify", (30, 215, 96), NowPlaying(), False)
 
 
 class TestNowPlayingScreen:
     def test_generic_screen_uses_label_and_accent(self, display):
-        from router.state import SpotifyState
-        info = SpotifyState(status="playing", title="", duration_ms=1000, position_ms=500)
+        from router.state import NowPlaying
+        info = NowPlaying(status="playing", title="", duration_ms=1000, position_ms=500)
         with patch.object(display, "_draw_header") as header, patch.object(display, "_push_image"):
             display.render_now_playing("AirPlay", (10, 132, 255), info, True)
         args, kwargs = header.call_args

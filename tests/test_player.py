@@ -32,7 +32,7 @@ class TestPlayerInit:
 
 
 class TestPlayerPlayback:
-    """Tests for play/stop/pause/resume."""
+    """Tests for play/stop/toggle."""
 
     def test_play_starts_mpv(self):
         with patch("nts.player.subprocess.Popen") as mock_popen, \
@@ -124,12 +124,6 @@ class TestPlayerPlayback:
         p._paused = True
         assert not p.is_playing()
 
-    def test_is_paused(self):
-        p = MPVPlayer()
-        assert not p.is_paused()
-        p._paused = True
-        assert p.is_paused()
-
 
 class TestPlayerIPC:
     """Tests for mpv JSON IPC communication."""
@@ -178,29 +172,6 @@ class TestPlayerProcessLifecycle:
         mock_proc.poll.return_value = 0  # exited
         assert not p._is_process_alive()
 
-    def test_resume_restarts_dead_process(self):
-        with patch("nts.player.subprocess.Popen") as mock_popen, \
-             patch("nts.player.os.path.exists", return_value=True), \
-             patch("nts.player.os.unlink"):
-            mock_proc = MagicMock()
-            mock_proc.poll.return_value = 0  # dead
-            mock_proc.pid = 1234
-            mock_popen.return_value = mock_proc
-
-            p = MPVPlayer()
-            p._current_url = "https://stream.example.com/stream1"
-            p._process = mock_proc
-            p._paused = False
-
-            # Make new process look alive
-            new_proc = MagicMock()
-            new_proc.poll.return_value = None
-            new_proc.pid = 5678
-            mock_popen.return_value = new_proc
-
-            p.resume()
-            mock_popen.assert_called()
-
     def test_shutdown(self):
         p = MPVPlayer()
         mock_proc = MagicMock()
@@ -213,13 +184,6 @@ class TestPlayerProcessLifecycle:
 
         mock_proc.terminate.assert_called()
         assert p._current_url is None
-
-    def test_get_current_url(self):
-        p = MPVPlayer()
-        assert p.get_current_url() is None
-
-        p._current_url = "https://stream.example.com/stream1"
-        assert p.get_current_url() == "https://stream.example.com/stream1"
 
     def test_cleanup_socket_no_file(self):
         """Cleanup should not raise if socket file doesn't exist."""

@@ -18,7 +18,7 @@ import logging
 from typing import Optional
 
 from router.policy import Arbiter
-from router.state import spotify_to_wire
+from router.state import now_playing_to_wire
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class Router:
     def state_message(self) -> dict:
         # Every adapter exposes its now-playing ``state`` in the same shape
         sources = {
-            name: spotify_to_wire(adapter.state)
+            name: now_playing_to_wire(adapter.state)
             for name, adapter in self.adapters.items()
             if getattr(adapter, "state", None) is not None
         }
