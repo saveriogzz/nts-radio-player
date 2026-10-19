@@ -1,6 +1,6 @@
 # NTS Radio for Raspberry Pi
 
-Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pimoroni Pirate Audio Line-out HAT. Also works as a Spotify Connect and AirPlay receiver. Deployed via Balena Cloud.
+Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pimoroni Pirate Audio Line-out HAT. Also works as a Spotify Connect speaker. Deployed via Balena Cloud.
 
 [![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/saveriogzz/nts-radio-player)
 
@@ -21,7 +21,7 @@ Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pi
 4. Click **Add device**, enter your Wi-Fi credentials, and download the OS image.
 5. Flash the image to the SD card with [balenaEtcher](https://etcher.balena.io/), insert it, and power on.
 
-On first boot the device downloads the application (a few minutes depending on your connection), the display shows **NTS RADIO — Starting up...**, and channel 1 starts playing automatically. The device also advertises itself on the network as a Spotify Connect and AirPlay target.
+On first boot the device downloads the application (a few minutes depending on your connection), the display shows **NTS RADIO — Starting up...**, and channel 1 starts playing automatically. The device also advertises itself on the network as a Spotify Connect target.
 
 ### Spotify Connect setup
 
@@ -32,7 +32,7 @@ balenaOS images can't carry environment variables, so the key can't be written t
 - Dashboard: **Fleet → Variables → Add variable** → `SOLOIST_API_KEY`
 - CLI: `balena env set SOLOIST_API_KEY <key> --fleet <fleet-name>`
 
-If the device is already online, set it as a device variable (**Device → Device Variables**, or `balena env set SOLOIST_API_KEY <key> --device <uuid>`) instead. balena restarts the services when the variable changes, so there's no need to reboot. Until the key is set, the Spotify service logs a warning and waits. NTS and AirPlay work without it.
+If the device is already online, set it as a device variable (**Device → Device Variables**, or `balena env set SOLOIST_API_KEY <key> --device <uuid>`) instead. balena restarts the services when the variable changes, so there's no need to reboot. Until the key is set, the Spotify service logs a warning and waits. NTS works without it.
 
 ### Name your speaker
 
@@ -92,14 +92,12 @@ NTS Radio plays on boot. The device also works as a receiver for:
 | Source | Protocol | How to use |
 |--------|----------|------------|
 | **Spotify Connect** | [Spotify Soloist](https://developer.spotify.com/documentation/soloist) | Open Spotify on any device → select this device as a speaker |
-| **AirPlay 2** | [shairport-sync](https://github.com/mikebrady/shairport-sync) | Use AirPlay from any Apple device or iTunes |
 
 Disable any source by setting its environment variable in the dashboard:
 
 | Variable | Effect |
 |----------|--------|
 | `DISABLE_SPOTIFY` | Disable Spotify Connect |
-| `DISABLE_AIRPLAY` | Disable AirPlay |
 
 ## Configuration
 
@@ -154,8 +152,7 @@ nts-radio-player/
 │   └── service.py             #   Arbitration + local WebSocket API
 ├── core/audio/                # PipeWire + WirePlumber + source router (core container)
 ├── plugins/
-│   ├── spotify/               # Spotify Connect (Spotify Soloist)
-│   └── airplay/               # AirPlay 2 (shairport-sync)
+│   └── spotify/               # Spotify Connect (Spotify Soloist)
 ├── assets/mixtapes/           # Bundled mixtape icons
 ├── tests/                     # Unit tests (hardware mocked, run anywhere)
 ├── Dockerfile.template        # nts-radio container build

@@ -44,12 +44,3 @@ services:
       - pipewire:/run/pipewire
     depends_on:
       - audio
-
-  airplay:
-    build: ./plugins/airplay
-    restart: on-failure
-    network_mode: host
-    privileged: true
-    labels:
-      io.balena.features.dbus: 1
-
