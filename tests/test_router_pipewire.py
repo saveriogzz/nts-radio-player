@@ -93,3 +93,18 @@ def test_monitor_against_fake_pw_dump(tmp_path, monkeypatch):
         return out
 
     assert asyncio.run(asyncio.wait_for(collect(), 5)) == [{"nts": True}, {"nts": False}]
+
+
+def test_node_announced_before_its_props():
+    """A new node may appear first without props; it must still be tracked."""
+    t = GraphTracker()
+    assert t.apply([{"id": 70, "type": "PipeWire:Interface:Node", "info": {"state": "creating"}}]) == {}
+    assert t.apply([{"id": 70, "type": "PipeWire:Interface:Node",
+                     "info": {"props": {"media.class": "Stream/Output/Audio", "application.name": "mpv"}}}]) == {}
+    assert t.apply([{"id": 70, "type": "PipeWire:Interface:Node", "info": {"state": "running"}}]) == {"nts": True}
+
+
+def test_non_node_objects_with_same_id_space_are_ignored():
+    t = GraphTracker()
+    t.apply([{"id": 80, "type": "PipeWire:Interface:Port", "info": {"props": {"media.class": "Stream/Output/Audio"}}}])
+    assert t.playing() == {}

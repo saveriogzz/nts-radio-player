@@ -39,7 +39,11 @@ class GraphTracker:
     """Tracks output streams; ``apply`` returns per-source playing changes."""
 
     def __init__(self):
-        self._streams: dict[int, dict] = {}  # id -> {"source", "state"}
+        # Every node seen, with props merged across updates: a new node may be
+        # announced before its properties are filled in, so it's classified
+        # whenever enough is known rather than only on first sight
+        self._nodes: dict[int, dict] = {}  # id -> {"props": {...}, "state": str|None}
+        self._non_nodes: set[int] = set()
         self._reported: dict[str, bool] = {}
 
     def apply(self, objects: list) -> dict[str, bool]:
@@ -49,27 +53,35 @@ class GraphTracker:
             oid = obj["id"]
             info = obj.get("info")
             if info is None:  # object removed
-                self._streams.pop(oid, None)
+                self._nodes.pop(oid, None)
+                self._non_nodes.discard(oid)
                 continue
-            if obj.get("type", "PipeWire:Interface:Node") != "PipeWire:Interface:Node":
+            kind = obj.get("type")
+            if kind is not None and kind != "PipeWire:Interface:Node":
+                self._non_nodes.add(oid)
                 continue
-            entry = self._streams.get(oid)
-            props = info.get("props") or {}
-            if entry is None:
-                if props.get("media.class") != "Stream/Output/Audio":
-                    continue
-                source = source_for(props)
-                if source is None:
-                    continue
-                entry = self._streams[oid] = {"source": source, "state": None}
+            if oid in self._non_nodes or not isinstance(info, dict):
+                continue
+            node = self._nodes.setdefault(oid, {"props": {}, "state": None})
+            if isinstance(info.get("props"), dict):
+                node["props"].update(info["props"])
             if info.get("state"):
-                entry["state"] = info["state"]
+                node["state"] = info["state"]
         return self._changes()
+
+    def _streams(self):
+        for node in self._nodes.values():
+            props = node["props"]
+            if props.get("media.class") != "Stream/Output/Audio":
+                continue
+            source = source_for(props)
+            if source is not None:
+                yield source, node["state"]
 
     def playing(self) -> dict[str, bool]:
         result: dict[str, bool] = {}
-        for entry in self._streams.values():
-            result[entry["source"]] = result.get(entry["source"], False) or entry["state"] == "running"
+        for source, state in self._streams():
+            result[source] = result.get(source, False) or state == "running"
         return result
 
     def _changes(self) -> dict[str, bool]:
