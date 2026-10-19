@@ -53,7 +53,7 @@ data:
   applicationEnvironmentVariables:
     # Spotify Connect speaker name; editable in the deploy form. Leave it
     # empty to name each device "nts-radio <first 4 of its UUID>".
-    - DEVICE_NAME: "NTS Radio"
+    - DEVICE_NAME: "RaspberryPi"
     - NTS_DEFAULT_CHANNEL: 1
     - NTS_DISPLAY_BRIGHTNESS: 80
     - NTS_BUTTON_DEBOUNCE_MS: 200
