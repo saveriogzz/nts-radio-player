@@ -67,13 +67,13 @@ balena env rm <id> --config --device --yes
 | A (top-left) | Previous channel/mixtape | Previous track | Scroll up |
 | B (bottom-left) | Next channel/mixtape | Next track | Scroll down |
 | X (top-right) | Play/Pause | Play/Pause | Select |
-| Y (bottom-right) | Open menu | Open menu | Back |
+| Y (bottom-right) | Open menu | Tap: menu · Hold: back to NTS | Back |
 
 ## Screens
 
 - **Live** — NTS 1 / NTS 2 with show artwork, title, and progress bar
 - **Mixtapes** — Browse and play all NTS infinite mixtapes
-- **Spotify** — Shown automatically while Spotify Connect plays: track, artist, album, cover and progress. NTS pauses when Spotify starts; 30 s after Spotify is paused or stopped the screen returns to NTS (still paused — press X to resume)
+- **Spotify** — Shown automatically while Spotify Connect plays: track, artist, album, cover and progress. NTS pauses when Spotify starts; 30 s after Spotify is paused or stopped the screen returns to NTS (still paused — press X to resume). Hold Y on the Spotify screen to go straight back to NTS: Spotify pauses and this speaker is released in the Spotify app
 - **Menu** — Switch between live radio, mixtapes and (while a Spotify track is loaded) Spotify
 
 ## Audio sources

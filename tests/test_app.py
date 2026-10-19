@@ -470,7 +470,8 @@ class TestSpotifyConnect:
         app._on_button_y()  # menu
         app._menu_selection = 0  # Live Radio
         app._on_button_x()
-        app._spotify.send_command.assert_called_with("pause")
+        sent = [c.args[0] for c in app._spotify.send_command.call_args_list]
+        assert sent[-2:] == ["pause", "deactivate"]
         assert app._get_state() == AppState.LIVE
 
     def test_menu_offers_spotify_while_track_loaded(self):
@@ -496,3 +497,71 @@ class TestSpotifyConnect:
         app = self._app()
         app._handle_event(SpotifyStateChanged(self._state()))
         assert app._get_state() == AppState.SPOTIFY
+
+
+class TestBackToNts:
+    """Hold Y on the Spotify screen: release Spotify, resume NTS."""
+
+    def _app_on_spotify(self, from_state=None):
+        from nts.app import AppState
+        app = _make_app()
+        app._spotify = MagicMock()
+        if from_state is not None:
+            app._set_state(from_state)
+        app._on_spotify_state(TestSpotifyConnect._state())
+        assert app._get_state() == AppState.SPOTIFY
+        app._player.reset_mock()
+        return app
+
+    def test_hold_y_returns_to_live_and_plays(self):
+        from nts.app import AppState
+        app = self._app_on_spotify()
+        app._on_button_y_long()
+        assert app._get_state() == AppState.LIVE
+        app._player.play.assert_called_once()
+        sent = [c.args[0] for c in app._spotify.send_command.call_args_list]
+        assert sent == ["pause", "deactivate"]
+
+    def test_hold_y_returns_to_mixtape_when_that_was_playing(self):
+        from nts.app import AppState
+        app = _make_app()
+        app._mixtapes = SAMPLE_MIXTAPES_RESPONSE["results"]
+        app._spotify = MagicMock()
+        app._set_state(AppState.MIXTAPE)
+        app._on_spotify_state(TestSpotifyConnect._state())
+        app._on_button_y_long()
+        assert app._get_state() == AppState.MIXTAPE
+        app._api.get_mixtape_stream_url.assert_called()
+
+    def test_in_flight_playing_after_release_is_ignored(self):
+        from nts.app import AppState
+        app = self._app_on_spotify()
+        app._on_button_y_long()
+        # Soloist may still report "playing" before the pause lands
+        app._on_spotify_state(TestSpotifyConnect._state())
+        assert app._get_state() == AppState.LIVE
+        app._player.suspend.assert_not_called()
+
+    def test_casting_again_after_stop_takes_over(self):
+        from nts.app import AppState
+        app = self._app_on_spotify()
+        app._on_button_y_long()
+        app._on_spotify_state(TestSpotifyConnect._state(status="idle"))
+        app._on_spotify_state(TestSpotifyConnect._state())
+        assert app._get_state() == AppState.SPOTIFY
+
+    def test_hold_y_on_nts_screens_acts_like_y(self):
+        from nts.app import AppState
+        app = _make_app()
+        app._spotify = MagicMock()
+        app._on_button_y_long()
+        assert app._get_state() == AppState.MENU
+        app._spotify.send_command.assert_not_called()
+        app._player.play.assert_not_called()
+
+    def test_long_press_event_dispatched(self):
+        from nts.app import AppState, ButtonLongPressed
+        from nts.buttons import BUTTON_Y
+        app = self._app_on_spotify()
+        app._handle_event(ButtonLongPressed(BUTTON_Y))
+        assert app._get_state() == AppState.LIVE
