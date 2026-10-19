@@ -31,6 +31,7 @@ NTS_ORANGE = (255, 77, 0)
 DARK_GRAY = (40, 40, 40)
 MID_GRAY = (100, 100, 100)
 LIGHT_GRAY = (180, 180, 180)
+SPOTIFY_GREEN = (30, 215, 96)
 
 # Font paths (Raspberry Pi OS)
 FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -174,7 +175,9 @@ class Display:
         draw = ImageDraw.Draw(img)
         return img, draw
 
-    def _draw_header(self, draw: ImageDraw.Draw, left_text: str, right_text: str):
+    def _draw_header(
+        self, draw: ImageDraw.Draw, left_text: str, right_text: str, accent=NTS_ORANGE
+    ):
         """Draw the header bar (20px tall)."""
         # Background strip
         draw.rectangle([(0, 0), (WIDTH, 22)], fill=DARK_GRAY)
@@ -183,10 +186,10 @@ class Display:
         # Right text (right-aligned)
         bbox = draw.textbbox((0, 0), right_text, font=self._font_small)
         rw = bbox[2] - bbox[0]
-        draw.text((WIDTH - rw - 6, 5), right_text, font=self._font_small, fill=NTS_ORANGE)
+        draw.text((WIDTH - rw - 6, 5), right_text, font=self._font_small, fill=accent)
 
     def _draw_progress_bar(
-        self, draw: ImageDraw.Draw, y: int, progress: float, time_text: str
+        self, draw: ImageDraw.Draw, y: int, progress: float, time_text: str, accent=NTS_ORANGE
     ):
         """Draw a progress bar with time remaining text.
 
@@ -210,7 +213,7 @@ class Display:
         if fill_w > 0:
             draw.rectangle(
                 [(bar_x, y), (bar_x + fill_w, y + bar_h)],
-                fill=NTS_ORANGE,
+                fill=accent,
             )
         # Time text
         draw.text(
@@ -301,7 +304,7 @@ class Display:
         self._draw_progress_bar(draw, 200, progress, time_remaining)
 
         # Button hints
-        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y ="])
+        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y Menu"])
 
         self._push_image(img)
 
@@ -369,7 +372,7 @@ class Display:
             draw.text((10, 200), desc, font=self._font_small, fill=MID_GRAY)
 
         # Button hints
-        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y ="])
+        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y Menu"])
 
         self._push_image(img)
 
@@ -408,6 +411,71 @@ class Display:
 
         # Button hints
         self._draw_button_hints(draw, ["A ^", "B v", "X Sel", "Y Back"])
+
+        self._push_image(img)
+
+    def render_spotify(
+        self,
+        info,
+        is_playing: bool,
+        artwork: Optional[Image.Image] = None,
+    ):
+        """Render the Spotify Connect "now playing" screen."""
+        self.render_now_playing("Spotify", SPOTIFY_GREEN, info, is_playing, artwork)
+
+    def render_now_playing(
+        self,
+        label: str,
+        accent: tuple,
+        info,
+        is_playing: bool,
+        artwork: Optional[Image.Image] = None,
+    ):
+        """Render a source's "now playing" screen (Spotify, AirPlay, ...).
+
+        Args:
+            label: Source name for the header.
+            accent: RGB colour for the status and progress bar.
+            info: Now-playing state (title, artist, album, duration_ms,
+                  current_position_ms()).
+            is_playing: Whether the source is currently playing.
+            artwork: Optional PIL Image for the cover (120x120).
+        """
+        img, draw = self._new_frame()
+
+        status = "> PLAY" if is_playing else "|| PAUSE"
+        self._draw_header(draw, label.upper(), status, accent=accent)
+
+        artwork_size = 120
+        artwork_x = (WIDTH - artwork_size) // 2
+        artwork_y = 28
+
+        if artwork is not None:
+            img.paste(artwork, (artwork_x, artwork_y))
+        else:
+            draw.rectangle(
+                [(artwork_x, artwork_y), (artwork_x + artwork_size, artwork_y + artwork_size)],
+                fill=DARK_GRAY,
+                outline=MID_GRAY,
+            )
+
+        title = self._truncate_text(draw, info.title or label, self._font_large, WIDTH - 20)
+        draw.text((10, 155), title, font=self._font_large, fill=WHITE)
+
+        subtitle = " · ".join(p for p in (info.artist, info.album) if p)
+        if subtitle:
+            subtitle = self._truncate_text(draw, subtitle, self._font_medium, WIDTH - 20)
+            draw.text((10, 178), subtitle, font=self._font_medium, fill=LIGHT_GRAY)
+
+        position = info.current_position_ms()
+        progress = position / info.duration_ms if info.duration_ms else 0.0
+        secs = position // 1000
+        self._draw_progress_bar(
+            draw, 200, progress, f"{secs // 60}:{secs % 60:02d}", accent=accent
+        )
+
+        # Y: tap = menu, hold = back to NTS (hold documented in the README)
+        self._draw_button_hints(draw, ["A|<", "B>|", "X ||", "Y Menu"])
 
         self._push_image(img)
 

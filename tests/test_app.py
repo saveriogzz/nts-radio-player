@@ -387,3 +387,292 @@ class TestEventHandling:
         app._request_live_refresh()
 
         assert app._spawn_worker.call_count == 1
+
+
+class TestSpotifyConnect:
+    """The router says Spotify owns the speaker: screen switches, NTS stops."""
+
+    @staticmethod
+    def _state(status="playing", title="Song", artwork_url=None, active="spotify"):
+        from nts.router_client import RouterState
+        from router.state import SpotifyState
+        spotify = SpotifyState(status=status, title=title, artist="Artist", artwork_url=artwork_url)
+        playing = frozenset({"spotify"}) if status == "playing" else frozenset()
+        return RouterState(active=active, playing=playing, sources={"spotify": spotify}, connected=True)
+
+    def _app(self):
+        app = _make_app()
+        app._router = MagicMock()
+        return app
+
+    @staticmethod
+    def _sent(app):
+        return [c.args for c in app._router.send_command.call_args_list]
+
+    def test_spotify_owner_stops_nts_and_shows_spotify(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_router_state(self._state())
+        assert app._get_state() == AppState.SOURCE
+        app._player.suspend.assert_called_once()
+
+    def test_spotify_owner_stops_nts_when_spotify_screen_already_open(self):
+        """Menu -> Spotify screen first, then X starts Spotify: NTS must stop."""
+        from nts.app import AppState
+        app = self._app()
+        app._on_router_state(self._state(status="paused", active="nts"))  # track loaded
+        app._on_button_y()
+        app._menu_selection = len(app._menu_items()) - 1  # "Spotify"
+        app._on_button_x()
+        assert app._get_state() == AppState.SOURCE
+        app._player.suspend.assert_not_called()
+        app._on_router_state(self._state(active="spotify"))  # router: Spotify owns it
+        app._player.suspend.assert_called_once()
+        assert app._get_state() == AppState.SOURCE
+
+    def test_spotify_playing_but_not_owner_does_nothing(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_router_state(self._state(active="nts"))
+        assert app._get_state() == AppState.LIVE
+        app._player.suspend.assert_not_called()
+
+    def test_playing_from_mixtape_remembers_mixtape(self):
+        from nts.app import AppState
+        app = self._app()
+        app._set_state(AppState.MIXTAPE)
+        app._on_router_state(self._state())
+        assert app._state_before_source == AppState.MIXTAPE
+
+    def test_playing_from_menu_remembers_screen_under_menu(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_button_y()  # open menu from LIVE
+        app._on_router_state(self._state())
+        assert app._get_state() == AppState.SOURCE
+        assert app._state_before_source == AppState.LIVE
+
+    def test_idle_returns_after_delay_without_resuming_nts(self):
+        from nts.app import AppState, SOURCE_RETURN_DELAY
+        app = self._app()
+        with patch("nts.app.time.time", return_value=1000.0):
+            app._on_router_state(self._state())
+            app._on_router_state(self._state(status="paused"))
+        app._check_source_idle(1000.0 + SOURCE_RETURN_DELAY - 1)
+        assert app._get_state() == AppState.SOURCE
+        app._check_source_idle(1000.0 + SOURCE_RETURN_DELAY)
+        assert app._get_state() == AppState.LIVE
+        app._player.play.assert_not_called()
+        app._player.toggle_pause.assert_not_called()
+
+    def test_resuming_spotify_cancels_return(self):
+        from nts.app import AppState, SOURCE_RETURN_DELAY
+        app = self._app()
+        with patch("nts.app.time.time", return_value=1000.0):
+            app._on_router_state(self._state())
+            app._on_router_state(self._state(status="paused"))
+            app._on_router_state(self._state())
+        app._check_source_idle(1000.0 + SOURCE_RETURN_DELAY * 2)
+        assert app._get_state() == AppState.SOURCE
+
+    def test_buttons_send_spotify_commands_via_router(self):
+        app = self._app()
+        app._on_router_state(self._state())
+        app._on_button_x()
+        app._on_button_a()
+        app._on_button_b()
+        assert self._sent(app) == [("spotify", "pause"), ("spotify", "skip_prev"), ("spotify", "skip_next")]
+
+    def test_x_plays_when_spotify_paused(self):
+        app = self._app()
+        app._on_router_state(self._state())
+        app._on_router_state(self._state(status="paused"))
+        app._on_button_x()
+        app._router.send_command.assert_called_with("spotify", "play")
+
+    def test_menu_live_radio_releases_spotify(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_router_state(self._state())
+        app._on_button_y()  # menu
+        app._menu_selection = 0  # Live Radio
+        app._on_button_x()
+        assert self._sent(app)[-1] == ("spotify", "stop")
+        assert app._get_state() == AppState.LIVE
+        app._player.play.assert_called()
+
+    def test_menu_offers_spotify_while_track_loaded(self):
+        from nts.app import AppState
+        app = self._app()
+        assert "Spotify" not in app._menu_items()
+        app._on_router_state(self._state())
+        assert app._menu_items()[-1] == "Spotify"
+        app._on_button_y()
+        app._menu_selection = len(app._menu_items()) - 1
+        app._on_button_x()
+        assert app._get_state() == AppState.SOURCE
+
+    def test_spotify_artwork_requested_and_rendered(self):
+        app = self._app()
+        app._on_router_state(self._state(artwork_url="https://i.scdn.co/c"))
+        assert "https://i.scdn.co/c" in app._artwork_pending
+        app._update_display()
+        app._display.render_now_playing.assert_called_once()
+
+    def test_router_event_dispatched(self):
+        from nts.app import AppState, RouterStateChanged
+        app = self._app()
+        app._handle_event(RouterStateChanged(self._state()))
+        assert app._get_state() == AppState.SOURCE
+
+    def test_router_disconnect_keeps_current_screen(self):
+        from nts.app import AppState
+        from nts.router_client import RouterState
+        app = self._app()
+        app._on_router_state(RouterState(connected=False))
+        assert app._get_state() == AppState.LIVE
+
+
+class TestBackToNts:
+    """Hold Y on the Spotify screen: release Spotify, resume NTS."""
+
+    def _app_on_spotify(self, from_state=None):
+        from nts.app import AppState
+        app = _make_app()
+        app._router = MagicMock()
+        if from_state is not None:
+            app._set_state(from_state)
+        app._on_router_state(TestSpotifyConnect._state())
+        assert app._get_state() == AppState.SOURCE
+        app._player.reset_mock()
+        return app
+
+    def test_hold_y_returns_to_live_and_plays(self):
+        from nts.app import AppState
+        app = self._app_on_spotify()
+        app._on_button_y_long()
+        assert app._get_state() == AppState.LIVE
+        app._player.play.assert_called_once()
+        app._router.send_command.assert_called_once_with("spotify", "stop")
+
+    def test_hold_y_returns_to_mixtape_when_that_was_playing(self):
+        from nts.app import AppState
+        app = _make_app()
+        app._mixtapes = SAMPLE_MIXTAPES_RESPONSE["results"]
+        app._router = MagicMock()
+        app._set_state(AppState.MIXTAPE)
+        app._on_router_state(TestSpotifyConnect._state())
+        app._on_button_y_long()
+        assert app._get_state() == AppState.MIXTAPE
+        app._api.get_mixtape_stream_url.assert_called()
+
+    def test_late_updates_while_spotify_still_owner_dont_switch_back(self):
+        from nts.app import AppState
+        app = self._app_on_spotify()
+        app._on_button_y_long()
+        # Router still reports Spotify as owner until mpv's stream is running
+        app._on_router_state(TestSpotifyConnect._state())
+        assert app._get_state() == AppState.LIVE
+        app._player.suspend.assert_not_called()
+
+    def test_casting_again_after_nts_took_over_switches(self):
+        from nts.app import AppState
+        app = self._app_on_spotify()
+        app._on_button_y_long()
+        app._on_router_state(TestSpotifyConnect._state(status="paused", active="nts"))
+        app._on_router_state(TestSpotifyConnect._state())
+        assert app._get_state() == AppState.SOURCE
+
+    def test_hold_y_on_nts_screens_acts_like_y(self):
+        from nts.app import AppState
+        app = _make_app()
+        app._router = MagicMock()
+        app._on_button_y_long()
+        assert app._get_state() == AppState.MENU
+        app._router.send_command.assert_not_called()
+        app._player.play.assert_not_called()
+
+    def test_long_press_event_dispatched(self):
+        from nts.app import AppState, ButtonLongPressed
+        from nts.buttons import BUTTON_Y
+        app = self._app_on_spotify()
+        app._handle_event(ButtonLongPressed(BUTTON_Y))
+        assert app._get_state() == AppState.LIVE
+
+
+class TestSourceStateMachine:
+    """Adding a source is a registry entry: no app changes needed."""
+
+    @staticmethod
+    def _state(active, sources):
+        from nts.router_client import RouterState
+        from router.state import SpotifyState
+        np = {name: SpotifyState(status=st, title=f"{name} song") for name, st in sources.items()}
+        playing = frozenset(n for n, st in sources.items() if st == "playing")
+        return RouterState(active=active, playing=playing, sources=np, connected=True)
+
+    def _app_with_airplay(self, monkeypatch):
+        from nts import sources
+        from nts.sources import SourceSpec
+        registry = dict(sources.SOURCES)
+        registry["airplay"] = SourceSpec(name="airplay", label="AirPlay", accent=(10, 132, 255),
+                                         buttons={"x": "toggle"})
+        monkeypatch.setattr("nts.app.SOURCES", registry)
+        app = _make_app()
+        app._router = MagicMock()
+        return app
+
+    def test_new_source_takes_over_screen_and_stops_nts(self, monkeypatch):
+        from nts.app import AppState
+        app = self._app_with_airplay(monkeypatch)
+        app._on_router_state(self._state("airplay", {"airplay": "playing"}))
+        assert app._get_state() == AppState.SOURCE
+        assert app._screen_source == "airplay"
+        app._player.suspend.assert_called_once()
+
+    def test_switch_between_two_sources_keeps_nts_return_point(self, monkeypatch):
+        from nts.app import AppState
+        app = self._app_with_airplay(monkeypatch)
+        app._set_state(AppState.MIXTAPE)
+        app._on_router_state(self._state("spotify", {"spotify": "playing"}))
+        app._on_router_state(self._state("airplay", {"spotify": "paused", "airplay": "playing"}))
+        assert app._screen_source == "airplay"
+        assert app._state_before_source == AppState.MIXTAPE
+
+    def test_buttons_follow_the_source_spec(self, monkeypatch):
+        app = self._app_with_airplay(monkeypatch)
+        app._on_router_state(self._state("airplay", {"airplay": "playing"}))
+        app._on_button_x()  # toggle -> pause
+        app._on_button_a()  # not mapped for airplay -> nothing
+        assert [c.args for c in app._router.send_command.call_args_list] == [("airplay", "pause")]
+
+    def test_menu_lists_every_loaded_source(self, monkeypatch):
+        app = self._app_with_airplay(monkeypatch)
+        app._on_router_state(self._state("nts", {"spotify": "paused", "airplay": "paused"}))
+        assert app._menu_items() == ["Live Radio", "Mixtapes", "Spotify", "AirPlay"]
+
+    def test_hold_y_releases_the_shown_source(self, monkeypatch):
+        from nts.app import AppState
+        app = self._app_with_airplay(monkeypatch)
+        app._on_router_state(self._state("airplay", {"airplay": "playing"}))
+        app._on_button_y_long()
+        assert app._get_state() == AppState.LIVE
+        app._router.send_command.assert_called_with("airplay", "stop")
+        app._player.play.assert_called()
+
+    def test_menu_from_source_screen_returns_to_it(self, monkeypatch):
+        from nts.app import AppState
+        app = self._app_with_airplay(monkeypatch)
+        app._on_router_state(self._state("airplay", {"airplay": "playing"}))
+        app._on_button_y()
+        assert app._get_state() == AppState.MENU
+        app._on_button_y()
+        assert app._get_state() == AppState.SOURCE and app._screen_source == "airplay"
+
+    def test_transition_table_covers_every_screen_and_button(self):
+        from nts.app import AppState, TRANSITIONS, NTSRadioApp
+        for state in AppState:
+            for event in ("a", "b", "x", "y", "hold_y"):
+                handler = TRANSITIONS.get((state, event)) or TRANSITIONS.get((None, event))
+                assert handler is not None, (state, event)
+                assert callable(getattr(NTSRadioApp, handler)), handler

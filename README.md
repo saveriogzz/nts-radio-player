@@ -1,6 +1,6 @@
 # NTS Radio for Raspberry Pi
 
-Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pimoroni Pirate Audio Line-out HAT. Also works as a Spotify Connect and AirPlay receiver. Deployed via Balena Cloud.
+Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pimoroni Pirate Audio Line-out HAT. Also works as a Spotify Connect speaker. Deployed via Balena Cloud.
 
 [![balena deploy button](https://www.balena.io/deploy.svg)](https://dashboard.balena-cloud.com/deploy?repoUrl=https://github.com/saveriogzz/nts-radio-player)
 
@@ -21,7 +21,7 @@ Stream NTS Radio (live channels + infinite mixtapes) on a Raspberry Pi with a Pi
 4. Click **Add device**, enter your Wi-Fi credentials, and download the OS image.
 5. Flash the image to the SD card with [balenaEtcher](https://etcher.balena.io/), insert it, and power on.
 
-On first boot the device downloads the application (a few minutes depending on your connection), the display shows **NTS RADIO — Starting up...**, and channel 1 starts playing automatically. The device also advertises itself on the network as a Spotify Connect and AirPlay target.
+On first boot the device downloads the application (a few minutes depending on your connection), the display shows **NTS RADIO — Starting up...**, and channel 1 starts playing automatically. The device also advertises itself on the network as a Spotify Connect target.
 
 ### Spotify Connect setup
 
@@ -32,7 +32,16 @@ balenaOS images can't carry environment variables, so the key can't be written t
 - Dashboard: **Fleet → Variables → Add variable** → `SOLOIST_API_KEY`
 - CLI: `balena env set SOLOIST_API_KEY <key> --fleet <fleet-name>`
 
-If the device is already online, set it as a device variable (**Device → Device Variables**, or `balena env set SOLOIST_API_KEY <key> --device <uuid>`) instead. balena restarts the services when the variable changes, so there's no need to reboot. Until the key is set, the Spotify service logs a warning and waits. NTS and AirPlay work without it.
+If the device is already online, set it as a device variable (**Device → Device Variables**, or `balena env set SOLOIST_API_KEY <key> --device <uuid>`) instead. balena restarts the services when the variable changes, so there's no need to reboot. Until the key is set, the Spotify service logs a warning and waits. NTS works without it.
+
+### Name your speaker
+
+The device shows up in the Spotify app as **`DEVICE_NAME`**. The deploy-button form asks for it (default `NTS Radio`, set for the whole fleet); leave it empty and each device is called `nts-radio XXXX` after its UUID.
+
+To give one device its own name, set it as a device variable — it overrides the fleet value, and balena restarts the Spotify service so the new name appears within seconds:
+
+- Dashboard: **Device → Device Variables → Add variable** → `DEVICE_NAME`
+- CLI: `balena env set DEVICE_NAME "Living Room" --device <uuid>`
 
 ### Manual deploy (balena CLI)
 
@@ -62,18 +71,19 @@ balena env rm <id> --config --device --yes
 
 ## Controls
 
-| Button | Playing | Menu |
-|--------|-------------|-----------|
-| A (top-left) | Previous channel/mixtape | Scroll up |
-| B (bottom-left) | Next channel/mixtape | Scroll down |
-| X (top-right) | Play/Pause | Select |
-| Y (bottom-right) | Open menu | Back |
+| Button | Playing | Spotify | Menu |
+|--------|-------------|---------|-----------|
+| A (top-left) | Previous channel/mixtape | Previous track | Scroll up |
+| B (bottom-left) | Next channel/mixtape | Next track | Scroll down |
+| X (top-right) | Play/Pause | Play/Pause | Select |
+| Y (bottom-right) | Open menu | Tap: menu · Hold: back to NTS | Back |
 
 ## Screens
 
 - **Live** — NTS 1 / NTS 2 with show artwork, title, and progress bar
 - **Mixtapes** — Browse and play all NTS infinite mixtapes
-- **Menu** — Switch between live radio and mixtapes
+- **Spotify** — Shown automatically while Spotify Connect plays: track, artist, album, cover and progress. NTS pauses when Spotify starts; 30 s after Spotify is paused or stopped the screen returns to NTS (still paused — press X to resume). Hold Y on the Spotify screen to go straight back to NTS: Spotify pauses and this speaker is released in the Spotify app
+- **Menu** — Switch between live radio, mixtapes and (while a Spotify track is loaded) Spotify
 
 ## Audio sources
 
@@ -82,14 +92,12 @@ NTS Radio plays on boot. The device also works as a receiver for:
 | Source | Protocol | How to use |
 |--------|----------|------------|
 | **Spotify Connect** | [Spotify Soloist](https://developer.spotify.com/documentation/soloist) | Open Spotify on any device → select this device as a speaker |
-| **AirPlay 2** | [shairport-sync](https://github.com/mikebrady/shairport-sync) | Use AirPlay from any Apple device or iTunes |
 
 Disable any source by setting its environment variable in the dashboard:
 
 | Variable | Effect |
 |----------|--------|
 | `DISABLE_SPOTIFY` | Disable Spotify Connect |
-| `DISABLE_AIRPLAY` | Disable AirPlay |
 
 ## Configuration
 
@@ -111,7 +119,7 @@ All settings are optional. Fleet-level defaults are preconfigured in `balena.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEVICE_NAME` | `nts-radio XXXX` | Broadcast name for Spotify Connect and AirPlay |
+| `DEVICE_NAME` | `nts-radio XXXX` | Spotify Connect speaker name — see [Name your speaker](#name-your-speaker) |
 | `SPOTIFY_INITIAL_VOLUME` | — | Spotify starting volume (0-100) |
 
 The hardware configuration (SPI, `hifiberry-dac` device tree overlay, onboard audio off) is applied automatically via the fleet's configuration variables — you'll find it under **Fleet → Configuration** in the dashboard.
@@ -133,11 +141,18 @@ nts-radio-player/
 │   ├── player.py              #   mpv wrapper (PipeWire output)
 │   ├── display.py             #   ST7789 240x240 display rendering
 │   ├── buttons.py             #   GPIO button handler with debounce
+│   ├── router_client.py       #   Client for the source router (state + commands)
+│   ├── sources.py             #   Registry of non-NTS sources (Spotify, ...)
 │   └── app.py                 #   Main app: single-threaded event loop
-├── core/audio/                # PipeWire + WirePlumber (shared DAC access)
+├── router/                    # Source router (runs in the audio container)
+│   ├── pipewire.py            #   Who is playing, from the PipeWire graph
+│   ├── policy.py              #   Who owns the speaker (newest wins)
+│   ├── soloist.py             #   Spotify adapter (Soloist WebSocket API)
+│   ├── state.py               #   Shared now-playing model
+│   └── service.py             #   Arbitration + local WebSocket API
+├── core/audio/                # PipeWire + WirePlumber + source router (core container)
 ├── plugins/
-│   ├── spotify/               # Spotify Connect (Spotify Soloist)
-│   └── airplay/               # AirPlay 2 (shairport-sync)
+│   └── spotify/               # Spotify Connect (Spotify Soloist)
 ├── assets/mixtapes/           # Bundled mixtape icons
 ├── tests/                     # Unit tests (hardware mocked, run anywhere)
 ├── Dockerfile.template        # nts-radio container build
@@ -146,6 +161,58 @@ nts-radio-player/
 ├── pyproject.toml
 └── uv.lock
 ```
+
+## Architecture
+
+```
+ ┌─────────────────── audio (core) ───────────────────┐
+ │ PipeWire + WirePlumber ──────────▶ HiFiBerry DAC   │◀── streams ── mpv (nts-radio), Soloist (spotify)
+ │        │ pw-dump --monitor (stream states)          │
+ │ router: who plays → newest wins → owner             │── pause/stop ──▶ Soloist ws://127.0.0.1:4318
+ │         now-playing feed  ws://127.0.0.1:4319       │◀── metadata ─── Soloist
+ └────────────────────────┬───────────────────────────┘
+                          │ state {active, playing, sources}
+ ┌────────────── nts-radio ┴─────────────┐
+ │ screen + buttons, NTS player (mpv)    │── commands for other sources ──▶ router
+ └───────────────────────────────────────┘
+```
+
+The router runs inside the `audio` container next to PipeWire, with its own
+restart loop: if it crashes it restarts, the sound keeps playing.
+
+- **Who is playing** comes from PipeWire, not from each source: the router watches
+  the audio output streams (`mpv` → NTS, `Spotify` → Spotify Connect).
+- **Who owns the speaker** is decided by the router: the source that starts playing
+  last wins, and the previous one is asked to stop (Spotify: pause and release the
+  Connect device). NTS stops itself (mpv exits) when it's no longer the owner.
+- **The screen** follows the router's `active` source; buttons on the Spotify screen
+  send commands through the router.
+
+Router API (JSON over WebSocket, loopback only):
+
+```json
+{"type": "state", "active": "spotify", "playing": ["spotify"],
+ "sources": {"spotify": {"status": "playing", "title": "…", "artist": "…",
+                         "album": "…", "artwork_url": "…", "duration_ms": 200000,
+                         "position_ms": 45000, "speed": 1.0}}}
+{"type": "command", "source": "spotify", "command": "pause"}
+```
+
+On the device side, `nts/app.py` is a small state machine: a `TRANSITIONS`
+table maps *(screen, button)* to a handler, and every non-NTS source shares one
+"now playing" screen (`AppState.SOURCE`). When the router hands the speaker to a
+source, NTS stops and that source's screen appears; holding Y gives the speaker
+back to NTS.
+
+Adding a source (e.g. AirPlay):
+
+1. **Router — detection:** a stream-name pattern in `router/pipewire.py`
+   (`SOURCE_PATTERNS`).
+2. **Router — control and metadata:** an adapter next to `router/soloist.py` with a
+   `state` (now-playing) and `command(...)`, registered in `router/__main__.py`.
+3. **Device:** one `SourceSpec` in `nts/sources.py` (name, label, colour, which
+   buttons send which commands). Screen, menu entry, takeover and hold-Y back to
+   NTS come for free.
 
 ## Local development
 

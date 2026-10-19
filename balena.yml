@@ -1,10 +1,10 @@
 name: nts-radio-player
 type: sw.application
 description: >-
-  Stream NTS Radio, Spotify Connect, and AirPlay on a Raspberry Pi
-  with Pimoroni Pirate Audio. NTS plays on boot; other sources are
-  discoverable on the network.
-version: "3.0.1"
+  Stream NTS Radio and Spotify Connect on a Raspberry Pi with Pimoroni
+  Pirate Audio. NTS plays on boot; the device is also a Spotify Connect
+  speaker.
+version: "3.1.0"
 assets:
   repository:
     type: blob.asset
@@ -32,13 +32,11 @@ post-provisioning: |
   `NTS_DISPLAY_BRIGHTNESS`, and `NTS_BUTTON_DEBOUNCE_MS` environment
   variables in the dashboard.
 
-  The device also advertises itself as a Spotify Connect and AirPlay
-  target. Spotify Connect requires a Soloist API key (generate one at
-  https://developer.spotify.com/documentation/soloist with a Premium
-  account): fill in `SOLOIST_API_KEY` when deploying, or set it later
-  under Fleet → Variables. Without it Spotify Connect stays off; NTS and
-  AirPlay work regardless. Disable either source with `DISABLE_SPOTIFY`
-  or `DISABLE_AIRPLAY`.
+  The device also advertises itself as a Spotify Connect target. Spotify
+  Connect requires a Soloist API key: add `SOLOIST_API_KEY` under
+  Fleet → Variables (generate one at
+  https://developer.spotify.com/documentation/soloist). Disable it with
+  `DISABLE_SPOTIFY`.
 data:
   defaultDeviceType: "raspberrypi0-2w-64"
   supportedDeviceTypes:
@@ -53,6 +51,9 @@ data:
     - RESIN_HOST_CONFIG_dtoverlay: '"vc4-kms-v3d,cma-320","hifiberry-dac"'
     - RESIN_HOST_CONFIG_gpio: '"25=op,dh"'
   applicationEnvironmentVariables:
+    # Spotify Connect speaker name; editable in the deploy form. Leave it
+    # empty to name each device "nts-radio <first 4 of its UUID>".
+    - DEVICE_NAME: "RaspberryPi"
     - NTS_DEFAULT_CHANNEL: 1
     - NTS_DISPLAY_BRIGHTNESS: 80
     - NTS_BUTTON_DEBOUNCE_MS: 200
