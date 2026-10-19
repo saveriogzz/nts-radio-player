@@ -108,3 +108,11 @@ def test_non_node_objects_with_same_id_space_are_ignored():
     t = GraphTracker()
     t.apply([{"id": 80, "type": "PipeWire:Interface:Port", "info": {"props": {"media.class": "Stream/Output/Audio"}}}])
     assert t.playing() == {}
+
+
+def test_describe_lists_mapped_and_unmapped_streams():
+    t = GraphTracker()
+    t.apply([_stream(43, "mpv", "running", app="mpv"), _stream(60, "mystery", "idle")])
+    text = t.describe()
+    assert "43:mpv=running->nts" in text
+    assert "60:mystery=idle->unmapped" in text

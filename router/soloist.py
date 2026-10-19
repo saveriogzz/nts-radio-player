@@ -40,6 +40,8 @@ class SoloistAdapter:
             return
         new_state = apply_message(self.state, msg)
         if new_state != self.state:
+            if new_state.status != self.state.status:
+                logger.info("Spotify status: %s -> %s", self.state.status, new_state.status)
             self.state = new_state
             await self._on_change()
 

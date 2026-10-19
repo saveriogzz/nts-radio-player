@@ -84,6 +84,17 @@ class GraphTracker:
             result[source] = result.get(source, False) or state == "running"
         return result
 
+    def describe(self) -> str:
+        """Streams currently mapped to sources, for logs."""
+        parts = []
+        for oid, node in sorted(self._nodes.items()):
+            props = node["props"]
+            if props.get("media.class") != "Stream/Output/Audio":
+                continue
+            name = props.get("application.name") or props.get("node.name") or "?"
+            parts.append(f"{oid}:{name}={node['state']}->{source_for(props) or 'unmapped'}")
+        return ", ".join(parts) or "none"
+
     def _changes(self) -> dict[str, bool]:
         now = self.playing()
         changes = {}
@@ -136,6 +147,7 @@ async def monitor(retry_delay: float = 5.0) -> AsyncIterator[dict[str, bool]]:
                 for value in values:
                     changes = tracker.apply(value)
                     if changes:
+                        logger.info("Playing changed %s; streams: %s", changes, tracker.describe())
                         yield changes
             await proc.wait()
             logger.warning("pw-dump exited (%s); restarting", proc.returncode)
