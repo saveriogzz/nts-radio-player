@@ -387,3 +387,112 @@ class TestEventHandling:
         app._request_live_refresh()
 
         assert app._spawn_worker.call_count == 1
+
+
+class TestSpotifyConnect:
+    """Spotify Connect takes over the screen and pauses NTS."""
+
+    @staticmethod
+    def _state(status="playing", title="Song", artwork_url=None):
+        from nts.spotify import SpotifyState
+        return SpotifyState(status=status, title=title, artist="Artist", artwork_url=artwork_url)
+
+    def _app(self):
+        app = _make_app()
+        app._spotify = MagicMock()
+        return app
+
+    def test_playing_pauses_nts_and_shows_spotify(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_spotify_state(self._state())
+        assert app._get_state() == AppState.SPOTIFY
+        app._player.pause.assert_called_once()
+
+    def test_playing_from_mixtape_remembers_mixtape(self):
+        from nts.app import AppState
+        app = self._app()
+        app._set_state(AppState.MIXTAPE)
+        app._on_spotify_state(self._state())
+        assert app._state_before_spotify == AppState.MIXTAPE
+
+    def test_playing_from_menu_remembers_screen_under_menu(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_button_y()  # open menu from LIVE
+        app._on_spotify_state(self._state())
+        assert app._get_state() == AppState.SPOTIFY
+        assert app._state_before_spotify == AppState.LIVE
+
+    def test_idle_returns_after_delay_without_resuming_nts(self):
+        from nts.app import AppState, SPOTIFY_RETURN_DELAY
+        app = self._app()
+        with patch("nts.app.time.time", return_value=1000.0):
+            app._on_spotify_state(self._state())
+            app._on_spotify_state(self._state(status="paused"))
+        app._check_spotify_idle(1000.0 + SPOTIFY_RETURN_DELAY - 1)
+        assert app._get_state() == AppState.SPOTIFY
+        app._check_spotify_idle(1000.0 + SPOTIFY_RETURN_DELAY)
+        assert app._get_state() == AppState.LIVE
+        app._player.resume.assert_not_called()
+        app._player.toggle_pause.assert_not_called()
+
+    def test_resuming_spotify_cancels_return(self):
+        from nts.app import AppState, SPOTIFY_RETURN_DELAY
+        app = self._app()
+        with patch("nts.app.time.time", return_value=1000.0):
+            app._on_spotify_state(self._state())
+            app._on_spotify_state(self._state(status="paused"))
+            app._on_spotify_state(self._state())
+        app._check_spotify_idle(1000.0 + SPOTIFY_RETURN_DELAY * 2)
+        assert app._get_state() == AppState.SPOTIFY
+
+    def test_buttons_send_spotify_commands(self):
+        app = self._app()
+        app._on_spotify_state(self._state())
+        app._on_button_x()
+        app._on_button_a()
+        app._on_button_b()
+        sent = [c.args[0] for c in app._spotify.send_command.call_args_list]
+        assert sent == ["pause", "skip_prev", "skip_next"]
+
+    def test_x_plays_when_spotify_paused(self):
+        app = self._app()
+        app._on_spotify_state(self._state())
+        app._on_spotify_state(self._state(status="paused"))
+        app._on_button_x()
+        app._spotify.send_command.assert_called_with("play")
+
+    def test_menu_live_radio_pauses_spotify(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_spotify_state(self._state())
+        app._on_button_y()  # menu
+        app._menu_selection = 0  # Live Radio
+        app._on_button_x()
+        app._spotify.send_command.assert_called_with("pause")
+        assert app._get_state() == AppState.LIVE
+
+    def test_menu_offers_spotify_while_track_loaded(self):
+        from nts.app import AppState
+        app = self._app()
+        assert "Spotify" not in app._menu_items()
+        app._on_spotify_state(self._state())
+        assert app._menu_items()[-1] == "Spotify"
+        app._on_button_y()
+        app._menu_selection = len(app._menu_items()) - 1
+        app._on_button_x()
+        assert app._get_state() == AppState.SPOTIFY
+
+    def test_spotify_artwork_requested_and_rendered(self):
+        app = self._app()
+        app._on_spotify_state(self._state(artwork_url="https://i.scdn.co/c"))
+        assert "https://i.scdn.co/c" in app._artwork_pending
+        app._update_display()
+        app._display.render_spotify.assert_called_once()
+
+    def test_spotify_event_dispatched(self):
+        from nts.app import AppState, SpotifyStateChanged
+        app = self._app()
+        app._handle_event(SpotifyStateChanged(self._state()))
+        assert app._get_state() == AppState.SPOTIFY
