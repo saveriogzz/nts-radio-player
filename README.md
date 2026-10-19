@@ -62,18 +62,19 @@ balena env rm <id> --config --device --yes
 
 ## Controls
 
-| Button | Playing | Menu |
-|--------|-------------|-----------|
-| A (top-left) | Previous channel/mixtape | Scroll up |
-| B (bottom-left) | Next channel/mixtape | Scroll down |
-| X (top-right) | Play/Pause | Select |
-| Y (bottom-right) | Open menu | Back |
+| Button | Playing | Spotify | Menu |
+|--------|-------------|---------|-----------|
+| A (top-left) | Previous channel/mixtape | Previous track | Scroll up |
+| B (bottom-left) | Next channel/mixtape | Next track | Scroll down |
+| X (top-right) | Play/Pause | Play/Pause | Select |
+| Y (bottom-right) | Open menu | Open menu | Back |
 
 ## Screens
 
 - **Live** — NTS 1 / NTS 2 with show artwork, title, and progress bar
 - **Mixtapes** — Browse and play all NTS infinite mixtapes
-- **Menu** — Switch between live radio and mixtapes
+- **Spotify** — Shown automatically while Spotify Connect plays: track, artist, album, cover and progress. NTS pauses when Spotify starts; 30 s after Spotify is paused or stopped the screen returns to NTS (still paused — press X to resume)
+- **Menu** — Switch between live radio, mixtapes and (while a Spotify track is loaded) Spotify
 
 ## Audio sources
 
@@ -133,6 +134,7 @@ nts-radio-player/
 │   ├── player.py              #   mpv wrapper (PipeWire output)
 │   ├── display.py             #   ST7789 240x240 display rendering
 │   ├── buttons.py             #   GPIO button handler with debounce
+│   ├── spotify.py             #   Spotify Connect now-playing (Soloist WebSocket API)
 │   └── app.py                 #   Main app: single-threaded event loop
 ├── core/audio/                # PipeWire + WirePlumber (shared DAC access)
 ├── plugins/

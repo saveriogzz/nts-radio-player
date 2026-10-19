@@ -324,3 +324,43 @@ class TestFrameDedup:
         display._last_frame_hash = 12345
         display.clear()
         assert display._last_frame_hash is None
+
+
+class TestSpotifyScreen:
+    """Tests for the Spotify Connect now-playing screen."""
+
+    def _info(self, **kw):
+        from nts.spotify import SpotifyState
+        fields = dict(status="playing", title="My Song", artist="Artist", album="Album",
+                      duration_ms=200000, position_ms=50000, position_ts=0.0, speed=0.0)
+        fields.update(kw)
+        return SpotifyState(**fields)
+
+    def test_render_without_artwork(self, display):
+        with patch.object(display, "_push_image") as push:
+            display.render_spotify(self._info(), True)
+        img = push.call_args[0][0]
+        assert img.size == (WIDTH, HEIGHT)
+
+    def test_render_with_artwork(self, display):
+        art = Image.new("RGB", (120, 120), (1, 2, 3))
+        with patch.object(display, "_push_image") as push:
+            display.render_spotify(self._info(), False, artwork=art)
+        img = push.call_args[0][0]
+        assert img.getpixel((WIDTH // 2, 80)) == (1, 2, 3)
+
+    def test_long_title_truncated(self, display):
+        results = []
+        original = display._truncate_text
+
+        def spy(*args, **kwargs):
+            results.append(original(*args, **kwargs))
+            return results[-1]
+
+        with patch.object(display, "_truncate_text", side_effect=spy):
+            display.render_spotify(self._info(title="X" * 200), True)
+        assert results[0].endswith("...")
+
+    def test_empty_state_renders(self, display):
+        from nts.spotify import SpotifyState
+        display.render_spotify(SpotifyState(), False)

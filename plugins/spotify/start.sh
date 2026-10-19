@@ -16,6 +16,9 @@ fi
 DEVICE_NAME=${DEVICE_NAME:-"nts-radio $(echo "$BALENA_DEVICE_UUID" | cut -c -4)"}
 SOLOIST_DATA_DIR=/var/lib/soloist
 SOLOIST_BIN="$SOLOIST_DATA_DIR/bin/soloist"
+# Local WebSocket API the nts-radio app reads "now playing" from. It has no
+# auth, so bind loopback only (both containers share the host network).
+SOLOIST_WS=127.0.0.1:4318
 
 case "$SOLOIST_ARCH" in
   aarch64) SOLOIST_ARCHIVE=soloist_release_arm64.tar.gz ;;
@@ -68,6 +71,7 @@ run_soloist() {
     --data-dir "$SOLOIST_DATA_DIR" \
     --cache-dir /tmp/soloist-cache \
     --cache-size 100 \
+    --ws "$SOLOIST_WS" \
     "$@"
 }
 
