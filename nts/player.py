@@ -145,6 +145,9 @@ class MPVPlayer:
                 # Load new URL into existing mpv
                 result = self._send_command(["loadfile", url, "replace"])
                 if result and result.get("error") == "success":
+                    # loadfile keeps mpv's pause flag; clear it or a paused
+                    # player stays silent while we report it as playing
+                    self._send_command(["set_property", "pause", False])
                     self._current_url = url
                     self._paused = False
                     return

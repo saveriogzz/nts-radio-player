@@ -226,3 +226,22 @@ class TestPlayerProcessLifecycle:
         p = MPVPlayer()
         with patch("nts.player.os.unlink", side_effect=FileNotFoundError):
             p._cleanup_socket()  # should not raise
+
+
+class TestPlayAfterPause:
+    def test_play_unpauses_reused_mpv(self):
+        """Returning to NTS after a pause must clear mpv's pause flag."""
+        p = MPVPlayer()
+        proc = MagicMock()
+        proc.poll.return_value = None
+        p._process = proc
+        p._current_url = "https://stream.example.com/live"
+        p._paused = True
+        p._send_command = MagicMock(return_value={"error": "success"})
+
+        p.play("https://stream.example.com/live")
+
+        sent = [c.args[0] for c in p._send_command.call_args_list]
+        assert ["loadfile", "https://stream.example.com/live", "replace"] in sent
+        assert sent[-1] == ["set_property", "pause", False]
+        assert p.is_playing()
