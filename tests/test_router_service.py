@@ -5,12 +5,12 @@ import json
 
 from router.service import Router
 from router.soloist import SoloistAdapter
-from router.state import SpotifyState
+from router.state import NowPlaying
 
 
 class FakeAdapter:
     def __init__(self):
-        self.state = SpotifyState(status="playing", title="Song")
+        self.state = NowPlaying(status="playing", title="Song")
         self.commands = []
 
     async def command(self, command):

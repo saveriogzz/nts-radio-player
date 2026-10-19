@@ -1,7 +1,7 @@
 """Playback state shared by the router and its clients.
 
-``SpotifyState`` is the now-playing snapshot of Spotify Connect; ``apply_message``
-folds Soloist's WebSocket events into it. Both the router (which talks to
+``NowPlaying`` is a source's now-playing snapshot (same shape for every
+source); ``apply_message`` folds Soloist's WebSocket events into it. Both the router (which talks to
 Soloist) and nts-radio (which draws it) use this module, so it has no
 dependencies beyond the standard library.
 """
@@ -15,7 +15,7 @@ _COVER_SIZE_PREFERENCE = ("default", "large", "small", "xlarge")
 
 
 @dataclass(frozen=True)
-class SpotifyState:
+class NowPlaying:
     status: str = "idle"  # idle, playing, paused, buffering
     title: str = ""
     artist: str = ""
@@ -74,7 +74,7 @@ def _position_fields(position: dict, now: float) -> dict:
     }
 
 
-def apply_message(state: SpotifyState, msg: dict, now: Optional[float] = None) -> SpotifyState:
+def apply_message(state: NowPlaying, msg: dict, now: Optional[float] = None) -> NowPlaying:
     """Return the state after one Soloist event; unknown events change nothing."""
     now = time.monotonic() if now is None else now
     if not isinstance(msg, dict):
@@ -108,7 +108,7 @@ def apply_message(state: SpotifyState, msg: dict, now: Optional[float] = None) -
     return state
 
 
-def spotify_to_wire(state: SpotifyState, now: Optional[float] = None) -> dict:
+def now_playing_to_wire(state: NowPlaying, now: Optional[float] = None) -> dict:
     """JSON-safe dict for the router API.
 
     ``position_ts`` is a process-local monotonic time, so it is not sent:
@@ -121,11 +121,11 @@ def spotify_to_wire(state: SpotifyState, now: Optional[float] = None) -> dict:
     return data
 
 
-def spotify_from_wire(data: Optional[dict], now: Optional[float] = None) -> SpotifyState:
-    """Inverse of ``spotify_to_wire``; unknown keys are ignored."""
+def now_playing_from_wire(data: Optional[dict], now: Optional[float] = None) -> NowPlaying:
+    """Inverse of ``now_playing_to_wire``; unknown keys are ignored."""
     if not isinstance(data, dict):
-        return SpotifyState()
-    known = {f.name for f in fields(SpotifyState)} - {"position_ts"}
+        return NowPlaying()
+    known = {f.name for f in fields(NowPlaying)} - {"position_ts"}
     values = {k: v for k, v in data.items() if k in known}
     now = time.monotonic() if now is None else now
-    return replace(SpotifyState(), **values, position_ts=now)
+    return replace(NowPlaying(), **values, position_ts=now)

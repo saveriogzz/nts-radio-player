@@ -44,9 +44,3 @@ class Arbiter:
             # Only interrupt the previous owner if it is actually still playing
             return Decision(active=source, stop=previous if previous in self._playing else None)
         return None
-
-    def forget(self, source: str) -> None:
-        """A source went away entirely (its service stopped)."""
-        self._playing.discard(source)
-        if self.active == source:
-            self.active = None

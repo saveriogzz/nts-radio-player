@@ -11,8 +11,6 @@ from dataclasses import dataclass, field
 
 from nts.display import SPOTIFY_GREEN
 
-NTS = "nts"
-
 
 @dataclass(frozen=True)
 class SourceSpec:

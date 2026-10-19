@@ -193,13 +193,6 @@ class MPVPlayer:
             self._current_url = None
             self._paused = False
 
-    def pause(self):
-        """Pause playback."""
-        with self._lock:
-            if self._is_process_alive():
-                self._send_command(["set_property", "pause", True])
-                self._paused = True
-
     def suspend(self):
         """Stop mpv but remember the stream; X / resume() restarts it.
 
@@ -236,16 +229,6 @@ class MPVPlayer:
             self._start_mpv(self._current_url)
             return True
 
-    def resume(self):
-        """Resume playback."""
-        with self._lock:
-            if self._is_process_alive():
-                self._send_command(["set_property", "pause", False])
-                self._paused = False
-            elif self._current_url:
-                # mpv died, restart
-                self._start_mpv(self._current_url)
-
     def toggle_pause(self):
         """Toggle play/pause state."""
         with self._lock:
@@ -265,14 +248,6 @@ class MPVPlayer:
         """Check if audio is currently playing (not paused, process alive)."""
         with self._lock:
             return self._is_process_alive() and not self._paused
-
-    def is_paused(self) -> bool:
-        """Check if playback is paused."""
-        return self._paused
-
-    def get_current_url(self) -> Optional[str]:
-        """Return the currently loaded URL."""
-        return self._current_url
 
     def shutdown(self):
         """Clean shutdown of the player."""

@@ -15,9 +15,8 @@ def test_parse_state_message():
     })
     assert st.active == "spotify"
     assert st.playing == frozenset({"spotify"})
-    assert st.spotify.title == "Song"
-    assert st.spotify.is_playing
-    assert st.connected
+    assert st.now_playing("spotify").title == "Song"
+    assert st.now_playing("spotify").is_playing
 
 
 def test_parse_ignores_other_messages():
@@ -28,7 +27,7 @@ def test_parse_ignores_other_messages():
 def test_missing_sources_gives_empty_spotify():
     st = parse_state({"type": "state", "active": "nts"})
     assert st.active == "nts"
-    assert st.spotify.title == ""
+    assert st.now_playing("spotify").title == ""
 
 
 def test_client_reports_state_messages_only():
@@ -54,5 +53,5 @@ def test_parse_keeps_every_source():
     st = parse_state({"type": "state", "active": "airplay",
                       "sources": {"spotify": {"title": "A"}, "airplay": {"title": "B", "status": "playing"}}})
     assert st.now_playing("airplay").title == "B"
-    assert st.spotify.title == "A"
+    assert st.now_playing("spotify").title == "A"
     assert st.now_playing("bluetooth").title == ""

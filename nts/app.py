@@ -26,7 +26,7 @@ from nts.api import NTSClient
 from nts.player import MPVPlayer
 from nts.display import Display
 from nts.router_client import RouterClient, RouterState
-from nts.sources import NTS, SOURCES, source_by_label
+from nts.sources import SOURCES, source_by_label
 from nts.buttons import (
     ButtonHandler,
     BUTTON_A,
@@ -268,22 +268,6 @@ class NTSRadioApp:
             self._on_router_state(event.state)
         else:
             logger.warning("Unknown event: %r", event)
-
-    # Button entry points (kept for tests and readability)
-    def _on_button_a(self):
-        self._dispatch("a")
-
-    def _on_button_b(self):
-        self._dispatch("b")
-
-    def _on_button_x(self):
-        self._dispatch("x")
-
-    def _on_button_y(self):
-        self._dispatch("y")
-
-    def _on_button_y_long(self):
-        self._dispatch("hold_y")
 
     # ── Transition handlers: NTS screens ─────────────────────
 
