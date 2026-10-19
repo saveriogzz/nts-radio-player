@@ -4,7 +4,7 @@ description: >-
   Stream NTS Radio and Spotify Connect on a Raspberry Pi with Pimoroni
   Pirate Audio. NTS plays on boot; the device is also a Spotify Connect
   speaker.
-version: "3.1.0"
+version: "3.1.1"
 assets:
   repository:
     type: blob.asset
