@@ -4,7 +4,7 @@ description: >-
   Stream NTS Radio, Spotify Connect, and AirPlay on a Raspberry Pi
   with Pimoroni Pirate Audio. NTS plays on boot; other sources are
   discoverable on the network.
-version: "2.1.0"
+version: "3.0.1"
 assets:
   repository:
     type: blob.asset
@@ -33,10 +33,12 @@ post-provisioning: |
   variables in the dashboard.
 
   The device also advertises itself as a Spotify Connect and AirPlay
-  target. Spotify Connect requires a Soloist API key: add `SOLOIST_API_KEY`
-  under Fleet → Variables before adding devices (generate one at
-  https://developer.spotify.com/documentation/soloist).
-  Disable either source with `DISABLE_SPOTIFY` or `DISABLE_AIRPLAY`.
+  target. Spotify Connect requires a Soloist API key (generate one at
+  https://developer.spotify.com/documentation/soloist with a Premium
+  account): fill in `SOLOIST_API_KEY` when deploying, or set it later
+  under Fleet → Variables. Without it Spotify Connect stays off; NTS and
+  AirPlay work regardless. Disable either source with `DISABLE_SPOTIFY`
+  or `DISABLE_AIRPLAY`.
 data:
   defaultDeviceType: "raspberrypi0-2w-64"
   supportedDeviceTypes:
@@ -56,3 +58,6 @@ data:
     - NTS_BUTTON_DEBOUNCE_MS: 200
     - VOLUME: 75
     - AUDIO_OUTPUT: DAC
+    # Required for Spotify Connect; left empty so it's never committed.
+    # Fill it in on the deploy form or under Fleet → Variables.
+    - SOLOIST_API_KEY: ""
