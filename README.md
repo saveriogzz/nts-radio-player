@@ -145,14 +145,13 @@ nts-radio-player/
 │   ├── buttons.py             #   GPIO button handler with debounce
 │   ├── router_client.py       #   Client for the source router (state + commands)
 │   └── app.py                 #   Main app: single-threaded event loop
-├── router/                    # Source router service (python -m router)
+├── router/                    # Source router (runs in the audio container)
 │   ├── pipewire.py            #   Who is playing, from the PipeWire graph
 │   ├── policy.py              #   Who owns the speaker (newest wins)
 │   ├── soloist.py             #   Spotify adapter (Soloist WebSocket API)
 │   ├── state.py               #   Shared now-playing model
 │   └── service.py             #   Arbitration + local WebSocket API
-├── core/audio/                # PipeWire + WirePlumber (shared DAC access)
-├── core/router/               # Source router container build
+├── core/audio/                # PipeWire + WirePlumber + source router (core container)
 ├── plugins/
 │   ├── spotify/               # Spotify Connect (Spotify Soloist)
 │   └── airplay/               # AirPlay 2 (shairport-sync)
@@ -168,19 +167,20 @@ nts-radio-player/
 ## Architecture
 
 ```
- ┌──────────── audio (core) ────────────┐
- │ PipeWire + WirePlumber → HiFiBerry DAC│◀── audio streams ── mpv (nts-radio), Soloist (spotify)
- └───────────────┬──────────────────────┘
-                 │ pw-dump --monitor (stream states)
- ┌───────────────▼── router (core) ─────┐   commands (pause/stop…)
- │ who plays → newest wins → owner       │──────────────────────▶ Soloist  ws://127.0.0.1:4318
- │ now-playing feed  ws://127.0.0.1:4319 │◀───── metadata ──────── Soloist
- └───────────────┬──────────────────────┘
-                 │ state {active, playing, sources}
- ┌───────────────▼── nts-radio ─────────┐
+ ┌─────────────────── audio (core) ───────────────────┐
+ │ PipeWire + WirePlumber ──────────▶ HiFiBerry DAC   │◀── streams ── mpv (nts-radio), Soloist (spotify)
+ │        │ pw-dump --monitor (stream states)          │
+ │ router: who plays → newest wins → owner             │── pause/stop ──▶ Soloist ws://127.0.0.1:4318
+ │         now-playing feed  ws://127.0.0.1:4319       │◀── metadata ─── Soloist
+ └────────────────────────┬───────────────────────────┘
+                          │ state {active, playing, sources}
+ ┌────────────── nts-radio ┴─────────────┐
  │ screen + buttons, NTS player (mpv)    │── commands for other sources ──▶ router
- └──────────────────────────────────────┘
+ └───────────────────────────────────────┘
 ```
+
+The router runs inside the `audio` container next to PipeWire, with its own
+restart loop: if it crashes it restarts, the sound keeps playing.
 
 - **Who is playing** comes from PipeWire, not from each source: the router watches
   the audio output streams (`mpv` → NTS, `Spotify` → Spotify Connect).

@@ -6,12 +6,16 @@ volumes:
 
 services:
   # ── Core ──────────────────────────────────────────────────
+  # Sound server (PipeWire) + source router: decides which source owns the
+  # speaker (newest wins) and serves a now-playing feed on ws://127.0.0.1:4319.
+  # Host network so the router can reach Soloist and nts-radio can reach it.
   audio:
-    build: ./core/audio
+    build:
+      context: .
+      dockerfile: core/audio/Dockerfile.template
     privileged: true
     restart: always
-    ports:
-      - 4317:4317
+    network_mode: host
     volumes:
       - pipewire:/run/pipewire
     environment:
@@ -24,20 +28,6 @@ services:
     network_mode: host
     tmpfs:
       - /tmp
-    volumes:
-      - pipewire:/run/pipewire
-    depends_on:
-      - audio
-      - router
-
-  # Decides which source owns the speaker (newest wins) and serves a
-  # now-playing feed on ws://127.0.0.1:4319
-  router:
-    build:
-      context: .
-      dockerfile: core/router/Dockerfile
-    restart: always
-    network_mode: host
     volumes:
       - pipewire:/run/pipewire
     depends_on:

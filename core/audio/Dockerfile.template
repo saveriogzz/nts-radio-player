@@ -1,20 +1,44 @@
+# Core audio: PipeWire + WirePlumber (the sound) and the source router (who
+# owns the speaker). Built from the repo root so the router can use uv.lock.
+
+# ── Router venv ──────────────────────────────────────────────────
+FROM debian:bookworm-slim AS router-build
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Debian's python3 (3.11), the same interpreter the runtime stage has
+ENV UV_PYTHON=/usr/bin/python3 UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+# Only the router's dependency group (websockets), not the app's
+RUN uv sync --locked --only-group router --no-cache
+
+# ── Runtime ──────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 # PipeWire graph + WirePlumber session manager + PulseAudio protocol shim
-# (for clients without native PipeWire support, e.g. shairport-sync)
+# (for clients without native PipeWire support, e.g. shairport-sync);
+# python3 runs the source router
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-    alsa-utils dbus-bin dbus-daemon dbus-session-bus-common jq pipewire pipewire-bin pipewire-pulse udev wireplumber \
+    alsa-utils dbus-bin dbus-daemon dbus-session-bus-common jq pipewire pipewire-bin pipewire-pulse \
+    python3 udev wireplumber \
   && rm -rf /var/lib/apt/lists/*
 
 # The native socket lives on a volume shared with client containers
 ENV XDG_RUNTIME_DIR=/run/pipewire
 
-COPY pipewire-pulse.conf /etc/pipewire/pipewire-pulse.conf.d/10-nts-radio.conf
-COPY wireplumber.lua /etc/wireplumber/main.lua.d/60-nts-radio.lua
-COPY wireplumber-bluetooth.lua /etc/wireplumber/bluetooth.lua.d/60-nts-radio.lua
+COPY core/audio/pipewire-pulse.conf /etc/pipewire/pipewire-pulse.conf.d/10-nts-radio.conf
+COPY core/audio/wireplumber.lua /etc/wireplumber/main.lua.d/60-nts-radio.lua
+COPY core/audio/wireplumber-bluetooth.lua /etc/wireplumber/bluetooth.lua.d/60-nts-radio.lua
+
+COPY --from=router-build /app/.venv /app/.venv
+COPY router/ /app/router/
 
 WORKDIR /usr/src
-COPY start.sh ./
+COPY core/audio/start.sh ./
 
 CMD [ "/bin/bash", "/usr/src/start.sh" ]

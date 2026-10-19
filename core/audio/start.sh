@@ -60,6 +60,17 @@ PIDS[wireplumber]=$!
 pipewire-pulse &
 PIDS[pipewire-pulse]=$!
 
+# Source router (who owns the speaker + now-playing API on 127.0.0.1:4319).
+# Supervised on its own: a router crash restarts the router, never the audio
+(
+  cd /app
+  while true; do
+    PIPEWIRE_RUNTIME_DIR="$XDG_RUNTIME_DIR" PYTHONUNBUFFERED=1 /app/.venv/bin/python -m router
+    echo "Router exited ($?), restarting in 5s"
+    sleep 5
+  done
+) &
+
 # ALSA card name pattern for each AUDIO_OUTPUT value
 case "$AUDIO_OUTPUT" in
   DAC) CARD_PATTERN="hifiberry" ;;
@@ -116,9 +127,10 @@ if ! wpctl set-volume @DEFAULT_AUDIO_SINK@ "$((VOLUME))%"; then
   echo "WARNING: no output sink available, volume not set."
 fi
 
-# Exit (and let the container restart) if any daemon dies
+# Exit (and let the container restart) if an audio daemon dies; the router
+# has its own restart loop above and is not part of this check
 set +e
-wait -n -p DEAD_PID
+wait -n -p DEAD_PID "${PIDS[pipewire]}" "${PIDS[wireplumber]}" "${PIDS[pipewire-pulse]}"
 STATUS=$?
 sleep 1
 for name in pipewire wireplumber pipewire-pulse; do
