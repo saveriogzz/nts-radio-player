@@ -36,7 +36,7 @@ If the device is already online, set it as a device variable (**Device → Devic
 
 ### Name your speaker
 
-The device shows up in the Spotify app as **`DEVICE_NAME`**. The deploy-button form asks for it (default `NTS Radio`, set for the whole fleet); leave it empty and each device is called `nts-radio XXXX` after its UUID.
+The device shows up in the Spotify app as **`DEVICE_NAME`**. The deploy-button form asks for it (default `RaspberryPi`, set for the whole fleet); leave it empty and each device is called `nts-radio XXXX` after its UUID.
 
 To give one device its own name, set it as a device variable — it overrides the fleet value, and balena restarts the Spotify service so the new name appears within seconds:
 
@@ -119,7 +119,7 @@ All settings are optional. Fleet-level defaults are preconfigured in `balena.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEVICE_NAME` | `nts-radio XXXX` | Spotify Connect speaker name — see [Name your speaker](#name-your-speaker) |
+| `DEVICE_NAME` | `RaspberryPi` (deploy button); `nts-radio XXXX` if unset | Spotify Connect speaker name — see [Name your speaker](#name-your-speaker) |
 | `SPOTIFY_INITIAL_VOLUME` | — | Spotify starting volume (0-100) |
 
 The hardware configuration (SPI, `hifiberry-dac` device tree overlay, onboard audio off) is applied automatically via the fleet's configuration variables — you'll find it under **Fleet → Configuration** in the dashboard.
