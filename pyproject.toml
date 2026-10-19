@@ -21,8 +21,14 @@ hw = [
 ]
 
 [dependency-groups]
+# Source router service (core/router): installed on its own with
+# `uv sync --only-group router`, so it doesn't pull in the app's deps
+router = [
+    "websockets>=13",
+]
 dev = [
     "pytest>=7.0.0",
+    { include-group = "router" },
 ]
 
 [tool.uv]

@@ -25,7 +25,8 @@ from typing import Optional
 from nts.api import NTSClient
 from nts.player import MPVPlayer
 from nts.display import Display
-from nts.spotify import SpotifyClient, SpotifyState
+from nts.router_client import RouterClient, RouterState
+from router.state import SpotifyState
 from nts.buttons import (
     ButtonHandler,
     BUTTON_A,
@@ -97,8 +98,8 @@ class MixtapesFetched:
 
 
 @dataclass(frozen=True)
-class SpotifyStateChanged:
-    state: SpotifyState
+class RouterStateChanged:
+    state: RouterState
 
 
 @dataclass(frozen=True)
@@ -143,15 +144,13 @@ class NTSRadioApp:
         self._player: Optional[MPVPlayer] = None
         self._display: Optional[Display] = None
         self._buttons: Optional[ButtonHandler] = None
-        self._spotify: Optional[SpotifyClient] = None
+        self._router: Optional[RouterClient] = None
 
         # Spotify Connect (loop thread only)
         self._spotify_state = SpotifyState()
         self._state_before_spotify = AppState.LIVE
         self._spotify_idle_since: Optional[float] = None
-        # Set when the user takes the output back for NTS; Spotify can't take
-        # over again until it has stopped once (ignores in-flight "playing")
-        self._spotify_released = False
+        self._router_state = RouterState()
 
         # Track what changed for display updates
         self._display_dirty = True
@@ -223,8 +222,8 @@ class NTSRadioApp:
             self._on_mixtapes(event.items)
         elif isinstance(event, ArtworkFetched):
             self._on_artwork(event.url, event.image)
-        elif isinstance(event, SpotifyStateChanged):
-            self._on_spotify_state(event.state)
+        elif isinstance(event, RouterStateChanged):
+            self._on_router_state(event.state)
         else:
             logger.warning("Unknown event: %r", event)
 
@@ -301,7 +300,7 @@ class NTSRadioApp:
 
     def _on_button_y_long(self):
         """Hold Y: back to NTS from Spotify, releasing the Spotify device."""
-        if self._get_state() != AppState.SPOTIFY and not self._spotify_state.is_playing:
+        if self._get_state() != AppState.SPOTIFY and self._router_state.active != "spotify":
             self._on_button_y()  # elsewhere a hold is just a (slow) Y press
             return
         self._release_spotify()
@@ -322,8 +321,9 @@ class NTSRadioApp:
         items = self._menu_items()
         item = items[min(self._menu_selection, len(items) - 1)]
 
-        # Switching to an NTS source releases Spotify so the two don't overlap
-        if item in ("Live Radio", "Mixtapes") and self._spotify_state.is_playing:
+        # Picking an NTS source releases Spotify (the router would pause it
+        # anyway once NTS plays; this also frees the Connect device)
+        if item in ("Live Radio", "Mixtapes") and self._router_state.active == "spotify":
             self._release_spotify()
 
         if item == "Live Radio":
@@ -485,8 +485,8 @@ class NTSRadioApp:
         return self.MENU_ITEMS
 
     def _spotify_command(self, command: str):
-        if self._spotify is not None:
-            self._spotify.send_command(command)
+        if self._router is not None:
+            self._router.send_command("spotify", command)
 
     def _release_spotify(self):
         """Pause Spotify and stop being the active Connect device.
@@ -494,39 +494,40 @@ class NTSRadioApp:
         The phone then shows playback paused on another device; casting to
         this speaker again re-activates it and takes over from NTS.
         """
-        self._spotify_command("pause")
-        self._spotify_command("deactivate")
-        self._spotify_released = True
+        self._spotify_command("stop")
         self._spotify_idle_since = None
 
-    def _on_spotify_state(self, new: SpotifyState):
-        """Take over the screen while Spotify plays; NTS pauses."""
-        old = self._spotify_state
-        self._spotify_state = new
+    def _on_router_state(self, new: RouterState):
+        """Follow the router: Spotify owning the speaker takes over the screen.
 
-        if self._spotify_released:
-            if new.is_playing:
-                return  # still winding down after the user picked NTS
-            self._spotify_released = False
+        Only a *change* of owner to Spotify switches screens, so late updates
+        while Spotify winds down (after hold-Y) can't pull the screen back.
+        """
+        old = self._router_state
+        self._router_state = new
+        old_spotify = self._spotify_state
+        self._spotify_state = new.spotify
 
-        if new.is_playing:
-            self._spotify_idle_since = None
+        if new.active == "spotify" and old.active != "spotify":
             if self._get_state() != AppState.SPOTIFY:
                 current = self._get_state()
                 self._state_before_spotify = (
                     self._state_before_menu if current == AppState.MENU else current
                 )
-                # Stop mpv entirely to free memory; X restarts the stream
+                # Stop mpv entirely to free memory; X / hold-Y restarts the stream
                 self._player.suspend()
                 self._set_state(AppState.SPOTIFY)
-        elif self._spotify_idle_since is None:
-            self._spotify_idle_since = time.time()
-
-        if new.artwork_url and new.artwork_url != old.artwork_url:
-            self._request_artwork(new.artwork_url)
 
         if self._get_state() == AppState.SPOTIFY:
+            if new.spotify.is_playing:
+                self._spotify_idle_since = None
+            elif self._spotify_idle_since is None:
+                self._spotify_idle_since = time.time()
             self._display_dirty = True
+
+        url = new.spotify.artwork_url
+        if url and url != old_spotify.artwork_url:
+            self._request_artwork(url)
 
     def _check_spotify_idle(self, now: float):
         """Back to the previous NTS screen once Spotify has been idle a while.
@@ -595,8 +596,8 @@ class NTSRadioApp:
         """Clean up all resources."""
         self._running = False
 
-        if self._spotify:
-            self._spotify.stop()
+        if self._router:
+            self._router.stop()
         if self._buttons:
             self._buttons.cleanup()
         if self._player:
@@ -660,11 +661,12 @@ class NTSRadioApp:
         self._request_live_refresh()
         self._request_mixtapes()
 
-        # Spotify Connect now-playing; harmless if Soloist never comes up
-        self._spotify = SpotifyClient(
-            lambda st: self._events.put(SpotifyStateChanged(st))
+        # Source router: who owns the speaker + Spotify now-playing; NTS works
+        # as before if the router never comes up
+        self._router = RouterClient(
+            lambda st: self._events.put(RouterStateChanged(st))
         )
-        self._spotify.start()
+        self._router.start()
 
         try:
             self._run_loop()

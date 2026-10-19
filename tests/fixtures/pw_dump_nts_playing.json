@@ -1,0 +1,59 @@
+[
+ {
+  "id": 28,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "idle",
+   "props": {
+    "node.name": "Dummy-Driver"
+   }
+  }
+ },
+ {
+  "id": 29,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "suspended",
+   "props": {
+    "node.name": "Freewheel-Driver"
+   }
+  }
+ },
+ {
+  "id": 38,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "suspended",
+   "props": {
+    "media.class": "Midi/Bridge",
+    "node.name": "Midi-Bridge"
+   }
+  }
+ },
+ {
+  "id": 47,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "running",
+   "props": {
+    "media.class": "Audio/Sink",
+    "node.name": "alsa_output._sys_devices_platform_soc_soc_sound_sound_card1.stereo-fallback",
+    "node.description": "Built-in Audio Stereo"
+   }
+  }
+ },
+ {
+  "id": 43,
+  "type": "PipeWire:Interface:Node",
+  "info": {
+   "state": "running",
+   "props": {
+    "media.class": "Stream/Output/Audio",
+    "node.name": "mpv",
+    "application.name": "mpv",
+    "media.name": "stream - mpv",
+    "node.description": "mpv"
+   }
+  }
+ }
+]

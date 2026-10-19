@@ -1,9 +1,6 @@
-"""Tests for nts.spotify — Soloist WebSocket event handling."""
+"""Tests for router.state — Soloist events → SpotifyState, wire format."""
 
-import json
-from unittest.mock import MagicMock
-
-from nts.spotify import SpotifyClient, SpotifyState, apply_message
+from router.state import SpotifyState, apply_message, spotify_from_wire, spotify_to_wire
 
 
 def _track(name="My Song", artists=("Artist A", "Artist B"), album="An Album",
@@ -103,22 +100,17 @@ class TestApplyMessage:
             assert apply_message(st, msg) == st
 
 
-class TestSpotifyClient:
-    def test_reports_only_changes(self):
-        on_state = MagicMock()
-        client = SpotifyClient(on_state)
-        client._handle_text(json.dumps(PLAYBACK_STATE))
-        client._handle_text(json.dumps({"type": "volume_changed", "volume": 10}))
-        client._handle_text("not json")
-        assert on_state.call_count == 1
-        assert on_state.call_args[0][0].title == "My Song"
+class TestWireFormat:
+    def test_round_trip_reanchors_position(self):
+        st = SpotifyState(status="playing", title="T", duration_ms=100000,
+                          position_ms=10000, position_ts=50.0, speed=1.0)
+        wire = spotify_to_wire(st, now=52.0)
+        assert "position_ts" not in wire
+        assert wire["position_ms"] == 12000
+        back = spotify_from_wire(wire, now=7.0)
+        assert back.title == "T" and back.position_ts == 7.0
+        assert back.current_position_ms(now=8.0) == 13000
 
-    def test_send_command_without_connection(self):
-        assert SpotifyClient(MagicMock()).send_command("pause") is False
-
-    def test_send_command_payload(self):
-        client = SpotifyClient(MagicMock())
-        client._ws = MagicMock()
-        assert client.send_command("skip_next") is True
-        sent = json.loads(client._ws.send.call_args[0][0])
-        assert sent == {"type": "command", "command": "skip_next"}
+    def test_from_wire_tolerates_junk(self):
+        assert spotify_from_wire(None) == SpotifyState(position_ts=spotify_from_wire(None).position_ts)
+        assert spotify_from_wire({"title": "x", "bogus": 1}).title == "x"

@@ -390,37 +390,51 @@ class TestEventHandling:
 
 
 class TestSpotifyConnect:
-    """Spotify Connect takes over the screen and pauses NTS."""
+    """The router says Spotify owns the speaker: screen switches, NTS stops."""
 
     @staticmethod
-    def _state(status="playing", title="Song", artwork_url=None):
-        from nts.spotify import SpotifyState
-        return SpotifyState(status=status, title=title, artist="Artist", artwork_url=artwork_url)
+    def _state(status="playing", title="Song", artwork_url=None, active="spotify"):
+        from nts.router_client import RouterState
+        from router.state import SpotifyState
+        spotify = SpotifyState(status=status, title=title, artist="Artist", artwork_url=artwork_url)
+        playing = frozenset({"spotify"}) if status == "playing" else frozenset()
+        return RouterState(active=active, playing=playing, spotify=spotify, connected=True)
 
     def _app(self):
         app = _make_app()
-        app._spotify = MagicMock()
+        app._router = MagicMock()
         return app
 
-    def test_playing_pauses_nts_and_shows_spotify(self):
+    @staticmethod
+    def _sent(app):
+        return [c.args for c in app._router.send_command.call_args_list]
+
+    def test_spotify_owner_stops_nts_and_shows_spotify(self):
         from nts.app import AppState
         app = self._app()
-        app._on_spotify_state(self._state())
+        app._on_router_state(self._state())
         assert app._get_state() == AppState.SPOTIFY
         app._player.suspend.assert_called_once()
+
+    def test_spotify_playing_but_not_owner_does_nothing(self):
+        from nts.app import AppState
+        app = self._app()
+        app._on_router_state(self._state(active="nts"))
+        assert app._get_state() == AppState.LIVE
+        app._player.suspend.assert_not_called()
 
     def test_playing_from_mixtape_remembers_mixtape(self):
         from nts.app import AppState
         app = self._app()
         app._set_state(AppState.MIXTAPE)
-        app._on_spotify_state(self._state())
+        app._on_router_state(self._state())
         assert app._state_before_spotify == AppState.MIXTAPE
 
     def test_playing_from_menu_remembers_screen_under_menu(self):
         from nts.app import AppState
         app = self._app()
         app._on_button_y()  # open menu from LIVE
-        app._on_spotify_state(self._state())
+        app._on_router_state(self._state())
         assert app._get_state() == AppState.SPOTIFY
         assert app._state_before_spotify == AppState.LIVE
 
@@ -428,57 +442,56 @@ class TestSpotifyConnect:
         from nts.app import AppState, SPOTIFY_RETURN_DELAY
         app = self._app()
         with patch("nts.app.time.time", return_value=1000.0):
-            app._on_spotify_state(self._state())
-            app._on_spotify_state(self._state(status="paused"))
+            app._on_router_state(self._state())
+            app._on_router_state(self._state(status="paused"))
         app._check_spotify_idle(1000.0 + SPOTIFY_RETURN_DELAY - 1)
         assert app._get_state() == AppState.SPOTIFY
         app._check_spotify_idle(1000.0 + SPOTIFY_RETURN_DELAY)
         assert app._get_state() == AppState.LIVE
-        app._player.resume.assert_not_called()
+        app._player.play.assert_not_called()
         app._player.toggle_pause.assert_not_called()
 
     def test_resuming_spotify_cancels_return(self):
         from nts.app import AppState, SPOTIFY_RETURN_DELAY
         app = self._app()
         with patch("nts.app.time.time", return_value=1000.0):
-            app._on_spotify_state(self._state())
-            app._on_spotify_state(self._state(status="paused"))
-            app._on_spotify_state(self._state())
+            app._on_router_state(self._state())
+            app._on_router_state(self._state(status="paused"))
+            app._on_router_state(self._state())
         app._check_spotify_idle(1000.0 + SPOTIFY_RETURN_DELAY * 2)
         assert app._get_state() == AppState.SPOTIFY
 
-    def test_buttons_send_spotify_commands(self):
+    def test_buttons_send_spotify_commands_via_router(self):
         app = self._app()
-        app._on_spotify_state(self._state())
+        app._on_router_state(self._state())
         app._on_button_x()
         app._on_button_a()
         app._on_button_b()
-        sent = [c.args[0] for c in app._spotify.send_command.call_args_list]
-        assert sent == ["pause", "skip_prev", "skip_next"]
+        assert self._sent(app) == [("spotify", "pause"), ("spotify", "skip_prev"), ("spotify", "skip_next")]
 
     def test_x_plays_when_spotify_paused(self):
         app = self._app()
-        app._on_spotify_state(self._state())
-        app._on_spotify_state(self._state(status="paused"))
+        app._on_router_state(self._state())
+        app._on_router_state(self._state(status="paused"))
         app._on_button_x()
-        app._spotify.send_command.assert_called_with("play")
+        app._router.send_command.assert_called_with("spotify", "play")
 
-    def test_menu_live_radio_pauses_spotify(self):
+    def test_menu_live_radio_releases_spotify(self):
         from nts.app import AppState
         app = self._app()
-        app._on_spotify_state(self._state())
+        app._on_router_state(self._state())
         app._on_button_y()  # menu
         app._menu_selection = 0  # Live Radio
         app._on_button_x()
-        sent = [c.args[0] for c in app._spotify.send_command.call_args_list]
-        assert sent[-2:] == ["pause", "deactivate"]
+        assert self._sent(app)[-1] == ("spotify", "stop")
         assert app._get_state() == AppState.LIVE
+        app._player.play.assert_called()
 
     def test_menu_offers_spotify_while_track_loaded(self):
         from nts.app import AppState
         app = self._app()
         assert "Spotify" not in app._menu_items()
-        app._on_spotify_state(self._state())
+        app._on_router_state(self._state())
         assert app._menu_items()[-1] == "Spotify"
         app._on_button_y()
         app._menu_selection = len(app._menu_items()) - 1
@@ -487,16 +500,23 @@ class TestSpotifyConnect:
 
     def test_spotify_artwork_requested_and_rendered(self):
         app = self._app()
-        app._on_spotify_state(self._state(artwork_url="https://i.scdn.co/c"))
+        app._on_router_state(self._state(artwork_url="https://i.scdn.co/c"))
         assert "https://i.scdn.co/c" in app._artwork_pending
         app._update_display()
         app._display.render_spotify.assert_called_once()
 
-    def test_spotify_event_dispatched(self):
-        from nts.app import AppState, SpotifyStateChanged
+    def test_router_event_dispatched(self):
+        from nts.app import AppState, RouterStateChanged
         app = self._app()
-        app._handle_event(SpotifyStateChanged(self._state()))
+        app._handle_event(RouterStateChanged(self._state()))
         assert app._get_state() == AppState.SPOTIFY
+
+    def test_router_disconnect_keeps_current_screen(self):
+        from nts.app import AppState
+        from nts.router_client import RouterState
+        app = self._app()
+        app._on_router_state(RouterState(connected=False))
+        assert app._get_state() == AppState.LIVE
 
 
 class TestBackToNts:
@@ -505,10 +525,10 @@ class TestBackToNts:
     def _app_on_spotify(self, from_state=None):
         from nts.app import AppState
         app = _make_app()
-        app._spotify = MagicMock()
+        app._router = MagicMock()
         if from_state is not None:
             app._set_state(from_state)
-        app._on_spotify_state(TestSpotifyConnect._state())
+        app._on_router_state(TestSpotifyConnect._state())
         assert app._get_state() == AppState.SPOTIFY
         app._player.reset_mock()
         return app
@@ -519,44 +539,43 @@ class TestBackToNts:
         app._on_button_y_long()
         assert app._get_state() == AppState.LIVE
         app._player.play.assert_called_once()
-        sent = [c.args[0] for c in app._spotify.send_command.call_args_list]
-        assert sent == ["pause", "deactivate"]
+        app._router.send_command.assert_called_once_with("spotify", "stop")
 
     def test_hold_y_returns_to_mixtape_when_that_was_playing(self):
         from nts.app import AppState
         app = _make_app()
         app._mixtapes = SAMPLE_MIXTAPES_RESPONSE["results"]
-        app._spotify = MagicMock()
+        app._router = MagicMock()
         app._set_state(AppState.MIXTAPE)
-        app._on_spotify_state(TestSpotifyConnect._state())
+        app._on_router_state(TestSpotifyConnect._state())
         app._on_button_y_long()
         assert app._get_state() == AppState.MIXTAPE
         app._api.get_mixtape_stream_url.assert_called()
 
-    def test_in_flight_playing_after_release_is_ignored(self):
+    def test_late_updates_while_spotify_still_owner_dont_switch_back(self):
         from nts.app import AppState
         app = self._app_on_spotify()
         app._on_button_y_long()
-        # Soloist may still report "playing" before the pause lands
-        app._on_spotify_state(TestSpotifyConnect._state())
+        # Router still reports Spotify as owner until mpv's stream is running
+        app._on_router_state(TestSpotifyConnect._state())
         assert app._get_state() == AppState.LIVE
         app._player.suspend.assert_not_called()
 
-    def test_casting_again_after_stop_takes_over(self):
+    def test_casting_again_after_nts_took_over_switches(self):
         from nts.app import AppState
         app = self._app_on_spotify()
         app._on_button_y_long()
-        app._on_spotify_state(TestSpotifyConnect._state(status="idle"))
-        app._on_spotify_state(TestSpotifyConnect._state())
+        app._on_router_state(TestSpotifyConnect._state(status="paused", active="nts"))
+        app._on_router_state(TestSpotifyConnect._state())
         assert app._get_state() == AppState.SPOTIFY
 
     def test_hold_y_on_nts_screens_acts_like_y(self):
         from nts.app import AppState
         app = _make_app()
-        app._spotify = MagicMock()
+        app._router = MagicMock()
         app._on_button_y_long()
         assert app._get_state() == AppState.MENU
-        app._spotify.send_command.assert_not_called()
+        app._router.send_command.assert_not_called()
         app._player.play.assert_not_called()
 
     def test_long_press_event_dispatched(self):

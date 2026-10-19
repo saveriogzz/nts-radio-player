@@ -36,6 +36,8 @@ WORKDIR /app
 
 # Copy application code and bundled assets
 COPY nts/ ./nts/
+# Shared playback-state model (router/state.py) used by the router client
+COPY router/ ./router/
 COPY assets/ ./assets/
 
 # Connect to the shared PipeWire server in the audio container

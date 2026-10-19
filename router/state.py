@@ -1,28 +1,17 @@
-"""Spotify Connect "now playing" via Soloist's local WebSocket API.
+"""Playback state shared by the router and its clients.
 
-Soloist (the spotify container) runs with ``--ws 127.0.0.1:4318`` and pushes
-JSON events about playback. ``apply_message`` folds those events into an
-immutable ``SpotifyState``; ``SpotifyClient`` runs the connection on a
-daemon thread and reports every state change through a callback, so the app
-loop only ever sees plain events.
+``SpotifyState`` is the now-playing snapshot of Spotify Connect; ``apply_message``
+folds Soloist's WebSocket events into it. Both the router (which talks to
+Soloist) and nts-radio (which draws it) use this module, so it has no
+dependencies beyond the standard library.
 """
 
-import json
-import logging
-import threading
 import time
-from dataclasses import dataclass, replace
-from typing import Callable, Optional
-
-logger = logging.getLogger(__name__)
-
-DEFAULT_URL = "ws://127.0.0.1:4318"
+from dataclasses import asdict, dataclass, fields, replace
+from typing import Optional
 
 # Soloist cover sizes, preferred first (the display shows 120x120 artwork)
 _COVER_SIZE_PREFERENCE = ("default", "large", "small", "xlarge")
-
-RECONNECT_MIN = 1.0
-RECONNECT_MAX = 30.0
 
 
 @dataclass(frozen=True)
@@ -119,83 +108,24 @@ def apply_message(state: SpotifyState, msg: dict, now: Optional[float] = None) -
     return state
 
 
-class SpotifyClient:
-    """Keeps a WebSocket connection to Soloist and reports state changes."""
+def spotify_to_wire(state: SpotifyState, now: Optional[float] = None) -> dict:
+    """JSON-safe dict for the router API.
 
-    def __init__(self, on_state: Callable[[SpotifyState], None], url: str = DEFAULT_URL):
-        self._on_state = on_state
-        self._url = url
-        self._state = SpotifyState()
-        self._ws = None
-        self._ws_lock = threading.Lock()
-        self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+    ``position_ts`` is a process-local monotonic time, so it is not sent:
+    ``position_ms`` is the interpolated position at send time and the receiver
+    re-anchors it on its own clock.
+    """
+    data = asdict(state)
+    data.pop("position_ts")
+    data["position_ms"] = state.current_position_ms(now)
+    return data
 
-    def start(self):
-        self._thread = threading.Thread(target=self._run, daemon=True, name="spotify-ws")
-        self._thread.start()
 
-    def stop(self):
-        self._stop.set()
-        with self._ws_lock:
-            if self._ws is not None:
-                try:
-                    self._ws.close()
-                except Exception:
-                    pass
-
-    def send_command(self, command: str) -> bool:
-        """Send a Soloist control command (play, pause, skip_next, ...)."""
-        with self._ws_lock:
-            if self._ws is None:
-                return False
-            try:
-                self._ws.send(json.dumps({"type": "command", "command": command}))
-                return True
-            except Exception:
-                logger.warning("Spotify command %r failed", command)
-                return False
-
-    def _handle_text(self, text: str):
-        try:
-            msg = json.loads(text)
-        except ValueError:
-            return
-        new_state = apply_message(self._state, msg)
-        if new_state != self._state:
-            self._state = new_state
-            self._on_state(new_state)
-
-    def _run(self):
-        import websocket  # websocket-client
-
-        delay = RECONNECT_MIN
-        connected_once = False
-        while not self._stop.is_set():
-            try:
-                ws = websocket.create_connection(self._url, timeout=10)
-                ws.settimeout(None)
-                with self._ws_lock:
-                    self._ws = ws
-                logger.info("Spotify WebSocket connected")
-                connected_once = True
-                delay = RECONNECT_MIN
-                while not self._stop.is_set():
-                    self._handle_text(ws.recv())
-            except Exception as e:
-                if connected_once:
-                    logger.info("Spotify WebSocket disconnected: %s", e)
-            finally:
-                with self._ws_lock:
-                    if self._ws is not None:
-                        try:
-                            self._ws.close()
-                        except Exception:
-                            pass
-                    self._ws = None
-            # Soloist gone: whatever was playing has stopped
-            if self._state.status != "idle":
-                self._state = replace(self._state, status="idle", speed=0.0)
-                self._on_state(self._state)
-            self._stop.wait(delay)
-            delay = min(delay * 2, RECONNECT_MAX)
+def spotify_from_wire(data: Optional[dict], now: Optional[float] = None) -> SpotifyState:
+    """Inverse of ``spotify_to_wire``; unknown keys are ignored."""
+    if not isinstance(data, dict):
+        return SpotifyState()
+    known = {f.name for f in fields(SpotifyState)} - {"position_ts"}
+    values = {k: v for k, v in data.items() if k in known}
+    now = time.monotonic() if now is None else now
+    return replace(SpotifyState(), **values, position_ts=now)

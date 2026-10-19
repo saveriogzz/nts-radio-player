@@ -28,6 +28,20 @@ services:
       - pipewire:/run/pipewire
     depends_on:
       - audio
+      - router
+
+  # Decides which source owns the speaker (newest wins) and serves a
+  # now-playing feed on ws://127.0.0.1:4319
+  router:
+    build:
+      context: .
+      dockerfile: core/router/Dockerfile
+    restart: always
+    network_mode: host
+    volumes:
+      - pipewire:/run/pipewire
+    depends_on:
+      - audio
 
   # ── Plugins ───────────────────────────────────────────────
   spotify:

@@ -330,7 +330,7 @@ class TestSpotifyScreen:
     """Tests for the Spotify Connect now-playing screen."""
 
     def _info(self, **kw):
-        from nts.spotify import SpotifyState
+        from router.state import SpotifyState
         fields = dict(status="playing", title="My Song", artist="Artist", album="Album",
                       duration_ms=200000, position_ms=50000, position_ts=0.0, speed=0.0)
         fields.update(kw)
@@ -362,5 +362,5 @@ class TestSpotifyScreen:
         assert results[0].endswith("...")
 
     def test_empty_state_renders(self, display):
-        from nts.spotify import SpotifyState
+        from router.state import SpotifyState
         display.render_spotify(SpotifyState(), False)
