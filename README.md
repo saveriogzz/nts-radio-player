@@ -34,6 +34,15 @@ balenaOS images can't carry environment variables, so the key can't be written t
 
 If the device is already online, set it as a device variable (**Device → Device Variables**, or `balena env set SOLOIST_API_KEY <key> --device <uuid>`) instead. balena restarts the services when the variable changes, so there's no need to reboot. Until the key is set, the Spotify service logs a warning and waits. NTS and AirPlay work without it.
 
+### Name your speaker
+
+The device shows up in the Spotify app as **`DEVICE_NAME`**. The deploy-button form asks for it (default `NTS Radio`, set for the whole fleet); leave it empty and each device is called `nts-radio XXXX` after its UUID.
+
+To give one device its own name, set it as a device variable — it overrides the fleet value, and balena restarts the Spotify service so the new name appears within seconds:
+
+- Dashboard: **Device → Device Variables → Add variable** → `DEVICE_NAME`
+- CLI: `balena env set DEVICE_NAME "Living Room" --device <uuid>`
+
 ### Manual deploy (balena CLI)
 
 Create a fleet on [Balena Cloud](https://dashboard.balena-cloud.com) (device type **Raspberry Pi Zero 2 W** or any supported model), then:
@@ -112,7 +121,7 @@ All settings are optional. Fleet-level defaults are preconfigured in `balena.yml
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEVICE_NAME` | `nts-radio XXXX` | Broadcast name for Spotify Connect and AirPlay |
+| `DEVICE_NAME` | `nts-radio XXXX` | Spotify Connect speaker name — see [Name your speaker](#name-your-speaker) |
 | `SPOTIFY_INITIAL_VOLUME` | — | Spotify starting volume (0-100) |
 
 The hardware configuration (SPI, `hifiberry-dac` device tree overlay, onboard audio off) is applied automatically via the fleet's configuration variables — you'll find it under **Fleet → Configuration** in the dashboard.
