@@ -144,6 +144,7 @@ nts-radio-player/
 │   ├── display.py             #   ST7789 240x240 display rendering
 │   ├── buttons.py             #   GPIO button handler with debounce
 │   ├── router_client.py       #   Client for the source router (state + commands)
+│   ├── sources.py             #   Registry of non-NTS sources (Spotify, ...)
 │   └── app.py                 #   Main app: single-threaded event loop
 ├── router/                    # Source router (runs in the audio container)
 │   ├── pipewire.py            #   Who is playing, from the PipeWire graph
@@ -200,8 +201,21 @@ Router API (JSON over WebSocket, loopback only):
 {"type": "command", "source": "spotify", "command": "pause"}
 ```
 
-Adding a source: give its stream a pattern in `router/pipewire.py`, and (to control
-it or show metadata) an adapter next to `router/soloist.py`.
+On the device side, `nts/app.py` is a small state machine: a `TRANSITIONS`
+table maps *(screen, button)* to a handler, and every non-NTS source shares one
+"now playing" screen (`AppState.SOURCE`). When the router hands the speaker to a
+source, NTS stops and that source's screen appears; holding Y gives the speaker
+back to NTS.
+
+Adding a source (e.g. AirPlay):
+
+1. **Router — detection:** a stream-name pattern in `router/pipewire.py`
+   (`SOURCE_PATTERNS`).
+2. **Router — control and metadata:** an adapter next to `router/soloist.py` with a
+   `state` (now-playing) and `command(...)`, registered in `router/__main__.py`.
+3. **Device:** one `SourceSpec` in `nts/sources.py` (name, label, colour, which
+   buttons send which commands). Screen, menu entry, takeover and hold-Y back to
+   NTS come for free.
 
 ## Local development
 

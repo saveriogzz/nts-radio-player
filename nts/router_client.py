@@ -14,6 +14,9 @@ from typing import Callable, Optional
 
 from router.state import SpotifyState, spotify_from_wire
 
+# Every source's now-playing data has the same shape
+NowPlaying = SpotifyState
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_URL = "ws://127.0.0.1:4319"
@@ -25,8 +28,15 @@ RECONNECT_MAX = 30.0
 class RouterState:
     active: Optional[str] = None  # "nts", "spotify", ... or None
     playing: frozenset = field(default_factory=frozenset)
-    spotify: SpotifyState = field(default_factory=SpotifyState)
+    sources: dict = field(default_factory=dict)  # name -> NowPlaying
     connected: bool = False
+
+    def now_playing(self, source: str) -> NowPlaying:
+        return self.sources.get(source) or NowPlaying()
+
+    @property
+    def spotify(self) -> NowPlaying:
+        return self.now_playing("spotify")
 
 
 def parse_state(msg: dict) -> Optional[RouterState]:
@@ -37,7 +47,8 @@ def parse_state(msg: dict) -> Optional[RouterState]:
     return RouterState(
         active=msg.get("active"),
         playing=frozenset(msg.get("playing") or ()),
-        spotify=spotify_from_wire(sources.get("spotify")),
+        sources={name: spotify_from_wire(data) for name, data in sources.items()
+                 if isinstance(data, dict)},
         connected=True,
     )
 

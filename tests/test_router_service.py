@@ -124,3 +124,9 @@ def test_api_end_to_end():
 
     run(scenario())
     assert spotify.commands == ["pause"]
+
+
+def test_state_message_includes_every_adapter():
+    router = Router({"spotify": FakeAdapter(), "airplay": FakeAdapter()})
+    msg = router.state_message()
+    assert set(msg["sources"]) == {"spotify", "airplay"}

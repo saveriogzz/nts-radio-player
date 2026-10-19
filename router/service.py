@@ -37,10 +37,12 @@ class Router:
     # ── State ────────────────────────────────────────────────
 
     def state_message(self) -> dict:
-        sources = {}
-        spotify = self.adapters.get("spotify")
-        if spotify is not None:
-            sources["spotify"] = spotify_to_wire(spotify.state)
+        # Every adapter exposes its now-playing ``state`` in the same shape
+        sources = {
+            name: spotify_to_wire(adapter.state)
+            for name, adapter in self.adapters.items()
+            if getattr(adapter, "state", None) is not None
+        }
         return {
             "type": "state",
             "active": self.arbiter.active,

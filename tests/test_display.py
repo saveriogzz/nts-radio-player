@@ -364,3 +364,14 @@ class TestSpotifyScreen:
     def test_empty_state_renders(self, display):
         from router.state import SpotifyState
         display.render_spotify(SpotifyState(), False)
+
+
+class TestNowPlayingScreen:
+    def test_generic_screen_uses_label_and_accent(self, display):
+        from router.state import SpotifyState
+        info = SpotifyState(status="playing", title="", duration_ms=1000, position_ms=500)
+        with patch.object(display, "_draw_header") as header, patch.object(display, "_push_image"):
+            display.render_now_playing("AirPlay", (10, 132, 255), info, True)
+        args, kwargs = header.call_args
+        assert args[1] == "AIRPLAY"
+        assert kwargs["accent"] == (10, 132, 255)

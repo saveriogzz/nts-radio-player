@@ -420,18 +420,31 @@ class Display:
         is_playing: bool,
         artwork: Optional[Image.Image] = None,
     ):
-        """Render the Spotify Connect "now playing" screen.
+        """Render the Spotify Connect "now playing" screen."""
+        self.render_now_playing("Spotify", SPOTIFY_GREEN, info, is_playing, artwork)
+
+    def render_now_playing(
+        self,
+        label: str,
+        accent: tuple,
+        info,
+        is_playing: bool,
+        artwork: Optional[Image.Image] = None,
+    ):
+        """Render a source's "now playing" screen (Spotify, AirPlay, ...).
 
         Args:
-            info: SpotifyState (title, artist, album, duration_ms,
+            label: Source name for the header.
+            accent: RGB colour for the status and progress bar.
+            info: Now-playing state (title, artist, album, duration_ms,
                   current_position_ms()).
-            is_playing: Whether Spotify is currently playing.
+            is_playing: Whether the source is currently playing.
             artwork: Optional PIL Image for the cover (120x120).
         """
         img, draw = self._new_frame()
 
         status = "> PLAY" if is_playing else "|| PAUSE"
-        self._draw_header(draw, "SPOTIFY", status, accent=SPOTIFY_GREEN)
+        self._draw_header(draw, label.upper(), status, accent=accent)
 
         artwork_size = 120
         artwork_x = (WIDTH - artwork_size) // 2
@@ -446,7 +459,7 @@ class Display:
                 outline=MID_GRAY,
             )
 
-        title = self._truncate_text(draw, info.title or "Spotify Connect", self._font_large, WIDTH - 20)
+        title = self._truncate_text(draw, info.title or label, self._font_large, WIDTH - 20)
         draw.text((10, 155), title, font=self._font_large, fill=WHITE)
 
         subtitle = " · ".join(p for p in (info.artist, info.album) if p)
@@ -458,7 +471,7 @@ class Display:
         progress = position / info.duration_ms if info.duration_ms else 0.0
         secs = position // 1000
         self._draw_progress_bar(
-            draw, 200, progress, f"{secs // 60}:{secs % 60:02d}", accent=SPOTIFY_GREEN
+            draw, 200, progress, f"{secs // 60}:{secs % 60:02d}", accent=accent
         )
 
         # Y: tap = menu, hold = back to NTS (hold documented in the README)

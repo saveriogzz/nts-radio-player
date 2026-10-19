@@ -48,3 +48,11 @@ def test_send_command_payload():
     assert client.send_command("spotify", "skip_next") is True
     sent = json.loads(client._ws.send.call_args[0][0])
     assert sent == {"type": "command", "source": "spotify", "command": "skip_next"}
+
+
+def test_parse_keeps_every_source():
+    st = parse_state({"type": "state", "active": "airplay",
+                      "sources": {"spotify": {"title": "A"}, "airplay": {"title": "B", "status": "playing"}}})
+    assert st.now_playing("airplay").title == "B"
+    assert st.spotify.title == "A"
+    assert st.now_playing("bluetooth").title == ""
