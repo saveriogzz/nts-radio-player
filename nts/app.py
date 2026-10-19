@@ -76,6 +76,11 @@ class ButtonPressed:
 
 
 @dataclass(frozen=True)
+class ButtonLongPressed:
+    button: int
+
+
+@dataclass(frozen=True)
 class LiveInfoFetched:
     """Per-channel info from a live-data fetch; empty dict on failure."""
     infos: dict = field(default_factory=dict)
@@ -139,6 +144,9 @@ class NTSRadioApp:
         self._spotify_state = SpotifyState()
         self._state_before_spotify = AppState.LIVE
         self._spotify_idle_since: Optional[float] = None
+        # Set when the user takes the output back for NTS; Spotify can't take
+        # over again until it has stopped once (ignores in-flight "playing")
+        self._spotify_released = False
 
         # Track what changed for display updates
         self._display_dirty = True
@@ -201,6 +209,9 @@ class NTSRadioApp:
             action = self._button_actions.get(event.button)
             if action:
                 action()
+        elif isinstance(event, ButtonLongPressed):
+            if event.button == BUTTON_Y:
+                self._on_button_y_long()
         elif isinstance(event, LiveInfoFetched):
             self._on_live_info(event.infos)
         elif isinstance(event, MixtapesFetched):
@@ -283,6 +294,22 @@ class NTSRadioApp:
             self._set_state(AppState.MENU)
             self._menu_selection = 0
 
+    def _on_button_y_long(self):
+        """Hold Y: back to NTS from Spotify, releasing the Spotify device."""
+        if self._get_state() != AppState.SPOTIFY and not self._spotify_state.is_playing:
+            self._on_button_y()  # elsewhere a hold is just a (slow) Y press
+            return
+        self._release_spotify()
+
+        # Resume whatever NTS source was on before Spotify took over
+        if self._state_before_spotify == AppState.MIXTAPE and self._mixtapes:
+            self._set_state(AppState.MIXTAPE)
+            self._play_mixtape(self._current_mixtape_idx)
+        else:
+            self._set_state(AppState.LIVE)
+            self._play_current()
+            self._request_live_refresh()
+
     # ── Menu actions ─────────────────────────────────────────
 
     def _select_menu_item(self):
@@ -290,9 +317,9 @@ class NTSRadioApp:
         items = self._menu_items()
         item = items[min(self._menu_selection, len(items) - 1)]
 
-        # Switching to an NTS source stops Spotify so the two don't overlap
+        # Switching to an NTS source releases Spotify so the two don't overlap
         if item in ("Live Radio", "Mixtapes") and self._spotify_state.is_playing:
-            self._spotify_command("pause")
+            self._release_spotify()
 
         if item == "Live Radio":
             self._set_state(AppState.LIVE)
@@ -456,10 +483,26 @@ class NTSRadioApp:
         if self._spotify is not None:
             self._spotify.send_command(command)
 
+    def _release_spotify(self):
+        """Pause Spotify and stop being the active Connect device.
+
+        The phone then shows playback paused on another device; casting to
+        this speaker again re-activates it and takes over from NTS.
+        """
+        self._spotify_command("pause")
+        self._spotify_command("deactivate")
+        self._spotify_released = True
+        self._spotify_idle_since = None
+
     def _on_spotify_state(self, new: SpotifyState):
         """Take over the screen while Spotify plays; NTS pauses."""
         old = self._spotify_state
         self._spotify_state = new
+
+        if self._spotify_released:
+            if new.is_playing:
+                return  # still winding down after the user picked NTS
+            self._spotify_released = False
 
         if new.is_playing:
             self._spotify_idle_since = None
@@ -595,6 +638,10 @@ class NTSRadioApp:
             self._buttons.on_press(
                 pin, lambda p=pin: self._events.put(ButtonPressed(p))
             )
+        # Hold Y: back to NTS from Spotify
+        self._buttons.on_long_press(
+            BUTTON_Y, lambda: self._events.put(ButtonLongPressed(BUTTON_Y))
+        )
         self._buttons.start()
 
         self._running = True

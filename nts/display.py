@@ -461,7 +461,8 @@ class Display:
             draw, 200, progress, f"{secs // 60}:{secs % 60:02d}", accent=SPOTIFY_GREEN
         )
 
-        self._draw_button_hints(draw, ["A|<", "B>|", "X ||", "Y ="])
+        # Y: tap = menu, hold = back to NTS
+        self._draw_button_hints(draw, ["A|<", "B>|", "X ||", "Y=/NTS"])
 
         self._push_image(img)
 

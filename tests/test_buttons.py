@@ -199,3 +199,51 @@ class TestButtonCleanup:
         handler.cleanup()
         assert handler._running is False
         mock_gpio.cleanup.assert_called()
+
+
+class TestLongPressWhileHeld:
+    """Long press fires once while held; release then triggers nothing."""
+
+    def test_fires_while_held_then_no_short_press(self, mock_gpio):
+        handler = ButtonHandler()
+        short_cb, long_cb = MagicMock(), MagicMock()
+        handler.on_press(BUTTON_Y, short_cb)
+        handler.on_long_press(BUTTON_Y, long_cb)
+        handler._press_times[BUTTON_Y] = time.time() - (LONG_PRESS_THRESHOLD_S + 0.1)
+
+        mock_gpio.input.return_value = 0  # still held
+        handler._check_release(BUTTON_Y)
+        handler._check_release(BUTTON_Y)
+        long_cb.assert_called_once()
+
+        mock_gpio.input.return_value = 1  # released
+        handler._check_release(BUTTON_Y)
+        long_cb.assert_called_once()
+        short_cb.assert_not_called()
+        assert BUTTON_Y not in handler._press_times
+
+    def test_short_press_unaffected(self, mock_gpio):
+        handler = ButtonHandler()
+        short_cb, long_cb = MagicMock(), MagicMock()
+        handler.on_press(BUTTON_Y, short_cb)
+        handler.on_long_press(BUTTON_Y, long_cb)
+        handler._press_times[BUTTON_Y] = time.time() - 0.2
+
+        mock_gpio.input.return_value = 0
+        handler._check_release(BUTTON_Y)
+        mock_gpio.input.return_value = 1
+        handler._check_release(BUTTON_Y)
+        short_cb.assert_called_once()
+        long_cb.assert_not_called()
+
+    def test_held_without_long_callback_waits_for_release(self, mock_gpio):
+        handler = ButtonHandler()
+        short_cb = MagicMock()
+        handler.on_press(BUTTON_A, short_cb)
+        handler._press_times[BUTTON_A] = time.time() - (LONG_PRESS_THRESHOLD_S + 0.1)
+        mock_gpio.input.return_value = 0
+        handler._check_release(BUTTON_A)
+        short_cb.assert_not_called()
+        mock_gpio.input.return_value = 1
+        handler._check_release(BUTTON_A)
+        short_cb.assert_called_once()

@@ -44,6 +44,7 @@ class ButtonHandler:
         self._callbacks: dict[int, Callable] = {}
         self._long_press_callbacks: dict[int, Callable] = {}
         self._press_times: dict[int, float] = {}
+        self._long_fired: set[int] = set()  # held buttons whose long press already fired
         self._running = False
         self._lock = threading.Lock()
 
@@ -106,33 +107,54 @@ class ButtonHandler:
         if press_time is None:
             return
 
+        duration = time.time() - press_time
+
         # Button is active-low (pressed = 0)
-        if self._GPIO.input(pin) == 1:  # Released
-            duration = time.time() - press_time
-            self._press_times.pop(pin, None)
-
-            with self._lock:
-                if duration >= LONG_PRESS_THRESHOLD_S:
+        if self._GPIO.input(pin) == 0:  # Still held
+            # Fire a long press as soon as the threshold is reached, so the
+            # user gets feedback without having to let go
+            if duration >= LONG_PRESS_THRESHOLD_S and pin not in self._long_fired:
+                with self._lock:
                     cb = self._long_press_callbacks.get(pin)
-                    if cb:
-                        try:
-                            cb()
-                        except Exception:
-                            logger.exception(
-                                "Error in long-press callback for %s",
-                                BUTTON_NAMES.get(pin, pin),
-                            )
-                        return
+                if cb:
+                    self._long_fired.add(pin)
+                    try:
+                        cb()
+                    except Exception:
+                        logger.exception(
+                            "Error in long-press callback for %s",
+                            BUTTON_NAMES.get(pin, pin),
+                        )
+            return
 
-                cb = self._callbacks.get(pin)
+        # Released
+        self._press_times.pop(pin, None)
+        if pin in self._long_fired:
+            self._long_fired.discard(pin)
+            return  # long press already handled; no short press
+
+        with self._lock:
+            if duration >= LONG_PRESS_THRESHOLD_S:
+                cb = self._long_press_callbacks.get(pin)
                 if cb:
                     try:
                         cb()
                     except Exception:
                         logger.exception(
-                            "Error in button callback for %s",
+                            "Error in long-press callback for %s",
                             BUTTON_NAMES.get(pin, pin),
                         )
+                    return
+
+            cb = self._callbacks.get(pin)
+            if cb:
+                try:
+                    cb()
+                except Exception:
+                    logger.exception(
+                        "Error in button callback for %s",
+                        BUTTON_NAMES.get(pin, pin),
+                    )
 
     def start(self):
         """Start listening for button events."""
