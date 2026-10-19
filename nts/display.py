@@ -304,7 +304,7 @@ class Display:
         self._draw_progress_bar(draw, 200, progress, time_remaining)
 
         # Button hints
-        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y ="])
+        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y Menu"])
 
         self._push_image(img)
 
@@ -372,7 +372,7 @@ class Display:
             draw.text((10, 200), desc, font=self._font_small, fill=MID_GRAY)
 
         # Button hints
-        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y ="])
+        self._draw_button_hints(draw, ["A<", "B>", "X ||", "Y Menu"])
 
         self._push_image(img)
 
@@ -461,8 +461,8 @@ class Display:
             draw, 200, progress, f"{secs // 60}:{secs % 60:02d}", accent=SPOTIFY_GREEN
         )
 
-        # Y: tap = menu, hold = back to NTS
-        self._draw_button_hints(draw, ["A|<", "B>|", "X ||", "Y=/NTS"])
+        # Y: tap = menu, hold = back to NTS (hold documented in the README)
+        self._draw_button_hints(draw, ["A|<", "B>|", "X ||", "Y Menu"])
 
         self._push_image(img)
 

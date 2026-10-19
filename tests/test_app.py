@@ -416,6 +416,20 @@ class TestSpotifyConnect:
         assert app._get_state() == AppState.SPOTIFY
         app._player.suspend.assert_called_once()
 
+    def test_spotify_owner_stops_nts_when_spotify_screen_already_open(self):
+        """Menu -> Spotify screen first, then X starts Spotify: NTS must stop."""
+        from nts.app import AppState
+        app = self._app()
+        app._on_router_state(self._state(status="paused", active="nts"))  # track loaded
+        app._on_button_y()
+        app._menu_selection = len(app._menu_items()) - 1  # "Spotify"
+        app._on_button_x()
+        assert app._get_state() == AppState.SPOTIFY
+        app._player.suspend.assert_not_called()
+        app._on_router_state(self._state(active="spotify"))  # router: Spotify owns it
+        app._player.suspend.assert_called_once()
+        assert app._get_state() == AppState.SPOTIFY
+
     def test_spotify_playing_but_not_owner_does_nothing(self):
         from nts.app import AppState
         app = self._app()

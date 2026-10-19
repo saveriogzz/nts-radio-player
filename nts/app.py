@@ -509,13 +509,15 @@ class NTSRadioApp:
         self._spotify_state = new.spotify
 
         if new.active == "spotify" and old.active != "spotify":
+            # Another source owns the speaker: always stop NTS, even if the
+            # Spotify screen is already showing (e.g. picked from the menu).
+            # Stopping mpv entirely frees memory; X / hold-Y restarts it.
+            self._player.suspend()
             if self._get_state() != AppState.SPOTIFY:
                 current = self._get_state()
                 self._state_before_spotify = (
                     self._state_before_menu if current == AppState.MENU else current
                 )
-                # Stop mpv entirely to free memory; X / hold-Y restarts the stream
-                self._player.suspend()
                 self._set_state(AppState.SPOTIFY)
 
         if self._get_state() == AppState.SPOTIFY:
