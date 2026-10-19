@@ -407,7 +407,7 @@ class TestSpotifyConnect:
         app = self._app()
         app._on_spotify_state(self._state())
         assert app._get_state() == AppState.SPOTIFY
-        app._player.pause.assert_called_once()
+        app._player.suspend.assert_called_once()
 
     def test_playing_from_mixtape_remembers_mixtape(self):
         from nts.app import AppState

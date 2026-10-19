@@ -48,8 +48,13 @@ DEFAULT_CONFIG = {
 LIVE_REFRESH_INTERVAL = 15
 DISPLAY_REFRESH_INTERVAL = 60  # For progress bar updates
 
-# Event loop tick (seconds) — max latency for timers when no events arrive
-TICK_INTERVAL = 0.1
+# The loop sleeps until the next timer is due or an event arrives; these
+# bound how long it may sleep (seconds)
+MIN_WAIT = 0.05
+MAX_WAIT = 5.0
+
+# How often to check that mpv is still alive when it should be playing
+PLAYER_WATCHDOG_INTERVAL = 5
 
 LIVE_CHANNELS = (1, 2)
 
@@ -511,7 +516,8 @@ class NTSRadioApp:
                 self._state_before_spotify = (
                     self._state_before_menu if current == AppState.MENU else current
                 )
-                self._player.pause()
+                # Stop mpv entirely to free memory; X restarts the stream
+                self._player.suspend()
                 self._set_state(AppState.SPOTIFY)
         elif self._spotify_idle_since is None:
             self._spotify_idle_since = time.time()
@@ -666,14 +672,25 @@ class NTSRadioApp:
             self._cleanup()
 
     def _run_loop(self):
-        """Main event loop: drain events, check timers, render."""
-        last_live_refresh = time.time()
-        last_display_refresh = time.time()
-        last_spotify_refresh = time.time()
+        """Main event loop: wait for an event or the next timer, then act."""
+        now = time.time()
+        next_live_refresh = now + LIVE_REFRESH_INTERVAL
+        next_display_refresh = now + DISPLAY_REFRESH_INTERVAL
+        next_spotify_refresh = now + SPOTIFY_REFRESH_INTERVAL
+        next_watchdog = now + PLAYER_WATCHDOG_INTERVAL
 
         while self._running:
+            deadlines = [next_live_refresh, next_display_refresh, next_watchdog]
+            if self._get_state() == AppState.SPOTIFY:
+                if self._spotify_state.is_playing:
+                    deadlines.append(next_spotify_refresh)
+                if self._spotify_idle_since is not None:
+                    deadlines.append(self._spotify_idle_since + SPOTIFY_RETURN_DELAY)
+            wait = min(deadlines) - time.time()
+            wait = max(MIN_WAIT, min(MAX_WAIT, wait))
+
             try:
-                event = self._events.get(timeout=TICK_INTERVAL)
+                event = self._events.get(timeout=wait)
             except queue.Empty:
                 event = None
 
@@ -684,26 +701,33 @@ class NTSRadioApp:
                 now = time.time()
 
                 # Periodic live data refresh
-                if now - last_live_refresh >= LIVE_REFRESH_INTERVAL:
+                if now >= next_live_refresh:
                     if self._get_state() == AppState.LIVE:
                         self._request_live_refresh(force=True)
-                    last_live_refresh = now
+                    next_live_refresh = now + LIVE_REFRESH_INTERVAL
 
                 # Periodic display refresh (for progress bar)
-                if now - last_display_refresh >= DISPLAY_REFRESH_INTERVAL:
+                if now >= next_display_refresh:
                     if self._get_state() == AppState.LIVE:
                         self._display_dirty = True
-                    last_display_refresh = now
+                    next_display_refresh = now + DISPLAY_REFRESH_INTERVAL
+
+                # Restart mpv if the stream died (network blip); not while
+                # Spotify owns the output
+                if now >= next_watchdog:
+                    if self._get_state() != AppState.SPOTIFY and self._player.ensure_playing():
+                        self._display_dirty = True
+                    next_watchdog = now + PLAYER_WATCHDOG_INTERVAL
 
                 # Spotify: progress bar while playing, hand back when idle
                 self._check_spotify_idle(now)
                 if (
                     self._get_state() == AppState.SPOTIFY
                     and self._spotify_state.is_playing
-                    and now - last_spotify_refresh >= SPOTIFY_REFRESH_INTERVAL
+                    and now >= next_spotify_refresh
                 ):
                     self._display_dirty = True
-                    last_spotify_refresh = now
+                    next_spotify_refresh = now + SPOTIFY_REFRESH_INTERVAL
 
                 # Update display if needed
                 self._update_display()
